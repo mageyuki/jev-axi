@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, renameSync, symlinkSync, writeFileSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, renameSync, symlinkSync, unlinkSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
@@ -107,6 +107,16 @@ describe("backend response cache", () => {
     clearCache(true, now);
     expect(readFileSync(outside)).toEqual(bytes);
     expect(existsSync(file)).toBe(false);
+  });
+
+  it("treats a managed entry symlink as a miss even when its target has no cache bytes", () => {
+    const s = scope("typesafe", "https://api.typesafe.ai/v1/systemone");
+    writeCached(s, "free", state, questions, response, now);
+    const file = requestPath(s);
+    const absent = join(mkdtempSync(join(tmpdir(), "cache-outside-")), "absent.json");
+    unlinkSync(file);
+    symlinkSync(absent, file);
+    expect(readCached(s, "free", state, questions, now)).toBeUndefined();
   });
 
   it("full cleanup unlinks managed links but leaves outside targets and linked directories unchanged", () => {

@@ -98,6 +98,29 @@ describe("Zen wire", () => {
     expect(() => validateZenResponse(answer, questions, credential)).toThrow();
   });
 
+  it("accepts a normal Zen envelope with a short Console credential", async () => {
+    process.env.JEV_BACKEND = "opencode-zen";
+    process.env.OPENCODE_API_KEY = "a";
+    const envelope = makeEnvelope(questions);
+    const wire = scriptedFetch([json(envelope)]);
+    const result = await evaluateZen(await resolveBackend({}), request, { fetch: wire.fetch, maxRetries: 0 });
+    expect(result).toEqual(envelope);
+    expect(wire.requests).toHaveLength(1);
+  });
+
+  it("rejects a 16-character credential echoed in a decoded answer without leaking it", async () => {
+    const longCredential = "0123456789abcdef";
+    process.env.JEV_BACKEND = "opencode-zen";
+    process.env.OPENCODE_API_KEY = longCredential;
+    const envelope = makeEnvelope(questions);
+    (envelope.answers.c as { extra?: string }).extra = `echo-${longCredential}`;
+    const wire = scriptedFetch([json(envelope)]);
+    const error = await evaluateZen(await resolveBackend({}), request, { fetch: wire.fetch, maxRetries: 0 }).catch(e => e);
+    expect(error.code).toBe("API_ERROR");
+    expect(error.message).not.toContain(longCredential);
+    expect(wire.requests).toHaveLength(1);
+  });
+
   it("rejects an oversized Zen response and cancels it without exposing its contents", async () => {
     const marker = "sensitive-body-marker";
     let cancelled = false;

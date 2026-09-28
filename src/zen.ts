@@ -28,7 +28,7 @@ export function validateZenQuestions(questions: QuestionMap): void {
 }
 
 export function assertNoCredentialEcho(value: unknown, credential: string): void {
-  if (!credential) return;
+  if (credential.length < 16) return;
   const seen = new WeakSet<object>();
   const scan = (item: unknown): void => {
     if (typeof item === "string") {

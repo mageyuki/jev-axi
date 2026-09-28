@@ -553,7 +553,7 @@ examples:
 
 ```
 usage: jev-axi models
-List the models available to this API key.
+List the models available on the selected backend (Zen catalog requires no key).
 ```
 
 ## config

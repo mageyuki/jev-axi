@@ -143,7 +143,10 @@ function isHtmlBody(body: unknown): boolean {
 
 export async function listModels(fetch?: Fetch): Promise<{ name: string; description: string; release_date: string }[]> {
   const backend = await getEvaluationBackend();
-  if (backend.name === "opencode-zen") throw new AxiError("Zen model listing is not available", "API_ERROR");
+  if (backend.name === "opencode-zen") return [
+    { name: "jev-1.13-free", description: "OpenCode Zen model (source: https://opencode.ai/docs/zen)", release_date: "" },
+    { name: "jev-1.13", description: "OpenCode Zen model (source: https://opencode.ai/docs/zen)", release_date: "" },
+  ];
   try {
     const key = requireBackendCredential(backend);
     const client = new TypeSafeClient({ apiKey: key, ...(backend.sdkBaseURL ? { baseURL: backend.sdkBaseURL } : {}),

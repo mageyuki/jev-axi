@@ -45,15 +45,18 @@ afterEach(() => {
 });
 
 describe("Zen command binding", () => {
-  it("never sends a Zen Console credential to the TypeSafe model listing", async () => {
+  it("returns the Zen documentation catalog without sending its Console credential to TypeSafe", async () => {
     const calls: Array<{ url: string; authorization: string }> = [];
     const listingFetch = async (url: any, init?: any) => {
       calls.push({ url: String(url), authorization: String(init?.headers?.Authorization ?? init?.headers?.authorization ?? "") });
       return new Response(JSON.stringify({ data: [] }), { status: 200, headers: { "content-type": "application/json" } });
     };
-    const failure = await listModels(listingFetch as any).catch(error => error);
-    expect(failure).toBeInstanceOf(Error);
-    expect(failure.message).not.toContain("synthetic-console-key-canary");
+    const outcome = await listModels(listingFetch as any).then(value => ({ value }), error => ({ error: String(error) }));
+    expect(JSON.stringify(outcome)).not.toContain("synthetic-console-key-canary");
+    expect(outcome).toEqual({ value: [
+      { name: "jev-1.13-free", description: "OpenCode Zen model (source: https://opencode.ai/docs/zen)", release_date: "" },
+      { name: "jev-1.13", description: "OpenCode Zen model (source: https://opencode.ai/docs/zen)", release_date: "" },
+    ] });
     expect(calls).toHaveLength(0);
   });
 

@@ -89,6 +89,13 @@ export function requireBackendCredential(backend: ResolvedBackend): string {
   throw new AxiError("TYPESAFE_API_KEY is not set; configure a TypeSafe environment, dotenv, or config key", "AUTH_REQUIRED");
 }
 
+/** Resolve and validate locally; never contact a backend. */
+export async function checkBackend(): Promise<BackendName> {
+  const backend = await resolveBackend();
+  requireBackendCredential(backend);
+  return backend.name;
+}
+
 export function describeBackend(backend: ResolvedBackend, override?: string): { backend: BackendName; model: string; credential: "ok" | "missing"; source: CredentialSource } {
   return { backend: backend.name, model: resolveBackendModel(backend, override), credential: backend.hasCredential ? "ok" : "missing", source: backend.credentialSource };
 }

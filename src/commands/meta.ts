@@ -6,6 +6,7 @@ import type { Renderable as AxiRenderable } from "./common.js";
 import { AxiError, installSessionStartHooks, sessionStartHookStatus } from "axi-sdk-js";
 import { numberFlag, parseArgs } from "../args.js";
 import { cacheStats, clearCache, listModels } from "../client.js";
+import { describeBackend, resolveBackend, resolveBackendModel } from "../backend.js";
 import {
   DEFAULT_CACHE_TTL_HOURS,
   DEFAULT_MODEL,
@@ -16,8 +17,6 @@ import {
   paths,
   readConfig,
   redactKey,
-  resolveApiKey,
-  resolveModel,
   writeConfig,
   type JevConfig,
 } from "../config.js";
@@ -28,13 +27,13 @@ import { round } from "../format.js";
 import { estimateCost, formatCost, formatTokens, groupUsage, readUsage, totals, type GroupBy } from "../usage.js";
 
 export const MODELS_HELP = `usage: jev-axi models
-List the models available to this API key.
+List the models available on the selected backend (Zen catalog requires no key).
 `;
 
 export async function modelsCommand(args: string[]): Promise<AxiRenderable> {
   const p = parseArgs(args, {}, "models");
   const models = await listModels();
-  const current = resolveModel(p.values["--model"]);
+  const current = resolveBackendModel(await resolveBackend(), p.values["--model"]);
   const rows = models.map((m) => ({ name: m.name, released: m.release_date.slice(0, 10), current: m.name === current ? "yes" : "", description: m.description }));
   if (p.bools["--json"]) return JSON.stringify(models, null, 2);
   return { models: rows, help: ["Pass --model <name> to any command, or `jev-axi config set model <name>`"] };
@@ -127,7 +126,7 @@ export async function configCommand(args: string[]): Promise<AxiRenderable> {
   if (action === "set" && value === undefined) throw validation(`config set ${key} needs a value`);
   const next = applyConfig(config, key, action === "set" ? value : undefined);
   writeConfig(next);
-  return { config: `${key} ${action === "set" ? "set" : "unset"}`, ...showConfig(next) };
+  return { config: `${key} ${action === "set" ? "set" : "unset"}`, ...await showConfig(next) };
 }
 
 function applyConfig(c: JevConfig, key: string, value: string | undefined): JevConfig {
@@ -155,14 +154,16 @@ function applyConfig(c: JevConfig, key: string, value: string | undefined): JevC
   return next;
 }
 
-function showConfig(c: JevConfig): Record<string, unknown> {
-  const key = resolveApiKey(c);
+async function showConfig(c: JevConfig): Promise<Record<string, unknown>> {
+  const backend = describeBackend(await resolveBackend(c));
   const update = availableUpdate(c);
   return {
     version: update ? `${VERSION}; ${updateLine(update)}` : VERSION,
     file: paths.configFile(),
-    apiKey: key.key ? `${redactKey(key.key)} (from ${key.file ?? key.source})` : "missing",
-    model: resolveModel(undefined, c),
+    backend: backend.backend,
+    apiKey: backend.backend === "opencode-zen" ? "TypeSafe-only (not used for Zen)" : backend.credential === "ok" ? `configured (from ${backend.source})` : "missing",
+    credential: backend.credential === "ok" ? `ok (${backend.source})` : "missing",
+    model: backend.model,
     price: `$${resolvePrices(c).input}/1M in, $${resolvePrices(c).output}/1M out${c.price?.input === undefined && c.price?.output === undefined ? " (default)" : ""}`,
     thresholds: `act >= ${c.thresholds?.act ?? DEFAULT_THRESHOLDS.act}, confirm >= ${c.thresholds?.confirm ?? DEFAULT_THRESHOLDS.confirm}`,
     cache: `${cacheCount()} responses in ${paths.cacheDir()}, reused for ${resolveCacheTtlHours(c)}h`,

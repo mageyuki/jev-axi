@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { keySearchDescription, resolveApiKey } from "../src/config.js";
+import { keySearchDescription, resolveApiKey, resolveModel } from "../src/config.js";
 
 describe("dotenv key discovery", () => {
   let root: string;
@@ -31,5 +31,14 @@ describe("dotenv key discovery", () => {
     vi.spyOn(process, "cwd").mockReturnValue(repo);
     expect(resolveApiKey({}).source).toBe("missing");
     expect(keySearchDescription()).toContain(`.env.local and .env in ${repo}`);
+  });
+
+  it("preserves environment, dotenv and config key precedence and existing model default", () => {
+    writeFileSync(join(root, ".env.local"), "TYPESAFE_API_KEY=synthetic-dotenv\n");
+    vi.spyOn(process, "cwd").mockReturnValue(root);
+    expect(resolveApiKey({ apiKey: "synthetic-config" })).toMatchObject({ key: "synthetic-dotenv", source: ".env" });
+    process.env.TYPESAFE_API_KEY = "synthetic-env";
+    expect(resolveApiKey({ apiKey: "synthetic-config" })).toEqual({ key: "synthetic-env", source: "env" });
+    expect(resolveModel(undefined, { model: "config-model" })).toBe("config-model");
   });
 });

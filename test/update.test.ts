@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { formatError } from "../src/cli.js";
 import { paths } from "../src/config.js";
 import { AxiError, validation } from "../src/errors.js";
-import { availableUpdate, isNewer, refreshUpdateCheck } from "../src/update.js";
+import { availableUpdate, isNewer, refreshUpdateCheck, updateHelp } from "../src/update.js";
 import { VERSION } from "../src/version.js";
 
 const registry = (version: string) => vi.fn(async () => new Response(JSON.stringify({ version }))) as unknown as typeof fetch;
@@ -57,5 +57,12 @@ describe("update notice", () => {
     expect(formatError(new AxiError("TYPESAFE_API_KEY is not set", "AUTH_REQUIRED")).output).toContain("jev-axi 99.0.0 is available");
     expect(formatError(new Error("boom")).output).toContain("Do not upgrade on your own");
     expect(formatError(validation("bad flag")).output).not.toContain("99.0.0");
+  });
+
+  it("directs an agent to report a new release without replacing the reviewed fork", () => {
+    const help = updateHelp("99.0.0");
+    expect(help).toContain("Do not upgrade on your own");
+    expect(help).not.toMatch(/npm install -g jev-axi|npx -y jev-axi/);
+    expect(help).toMatch(/reviewed fork/i);
   });
 });

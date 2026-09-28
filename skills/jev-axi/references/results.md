@@ -10,7 +10,7 @@ Output is compact key-value text. Add `--json` when you need to parse it.
 | `band: confirm` | 0.45 to 0.75 | Plausible; verify cheaply (open the file, read the lines) before acting. |
 | `band: escalate` | below 0.45 | Don't rely on it. Read the material yourself or ask the user. |
 | `*_exists` below ~0.35 | nothing in the input really matches | The ranking is only the least bad option; widen the search. |
-| `usage: ... cached` | an identical request was answered in the last 24 hours | Normal and free. Any change to the input or question makes a fresh call. |
+| `usage: ... cached` | an identical request for the selected backend and model was answered within the default 24-hour TTL | No model call. A cold cache needs a provider call; `cacheTtlHours` changes the TTL and 0 disables it. Zen still requires a credential for a hit. |
 
 For yes/no answers, confidence is the distance from 0.5: a `p_yes` of 0.05 is a confident no.
 
@@ -20,7 +20,8 @@ Errors print `error:` and `code:` with a `help:` hint on stdout. Exit code 2 mea
 fix the flags as the hint says. Commands that need input and get none say which flag or path to
 pass. Exit code 1 means an API problem: for `RATE_LIMITED` or `NETWORK`, retry once, then continue
 without jev-axi. `AUTH_REQUIRED` means no valid key: skip jev-axi for the rest of the
-task and tell the user in your final answer that no valid key is set. `guard` exits 3 on block;
+task and tell the user which selected backend lacks or rejected its credential, without printing
+the credential. A local `--check-backend` cannot validate a key remotely. `guard` exits 3 on block;
 `progress` exits 3 on any verdict other than `finish`.
 
 ## Limits

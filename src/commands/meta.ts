@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { configureAgent } from "./agent.js";
 import { configureGitHooks } from "./githooks.js";
 import { configureSuperviseHooks, SUPERVISE_HOOK_COMMAND, configureSafetyHook, safetyHookPath as configureSafetyHookPath, SAFETY_HOOK_COMMAND } from "./hook.js";
@@ -6,6 +6,7 @@ import type { Renderable as AxiRenderable } from "./common.js";
 import { AxiError, installSessionStartHooks, sessionStartHookStatus } from "axi-sdk-js";
 import { numberFlag, parseArgs } from "../args.js";
 import { cacheStats, clearCache, listModels } from "../client.js";
+import { describeBackend, resolveBackend, resolveBackendModel } from "../backend.js";
 import {
   DEFAULT_CACHE_TTL_HOURS,
   DEFAULT_MODEL,
@@ -16,8 +17,6 @@ import {
   paths,
   readConfig,
   redactKey,
-  resolveApiKey,
-  resolveModel,
   writeConfig,
   type JevConfig,
 } from "../config.js";
@@ -25,16 +24,16 @@ import { validation } from "../errors.js";
 import { availableUpdate, refreshUpdateCheck, updateHelp, updateLine } from "../update.js";
 import { VERSION } from "../version.js";
 import { round } from "../format.js";
-import { estimateCost, formatCost, formatTokens, groupUsage, readUsage, totals, type GroupBy } from "../usage.js";
+import { costTotals, formatEstimatedCost, formatTokens, groupUsage, readUsage, totals, type GroupBy } from "../usage.js";
 
 export const MODELS_HELP = `usage: jev-axi models
-List the models available to this API key.
+List the models available on the selected backend (Zen catalog requires no key).
 `;
 
 export async function modelsCommand(args: string[]): Promise<AxiRenderable> {
   const p = parseArgs(args, {}, "models");
   const models = await listModels();
-  const current = resolveModel(p.values["--model"]);
+  const current = resolveBackendModel(await resolveBackend(), p.values["--model"]);
   const rows = models.map((m) => ({ name: m.name, released: m.release_date.slice(0, 10), current: m.name === current ? "yes" : "", description: m.description }));
   if (p.bools["--json"]) return JSON.stringify(models, null, 2);
   return { models: rows, help: ["Pass --model <name> to any command, or `jev-axi config set model <name>`"] };
@@ -46,7 +45,7 @@ flags:
   --days <n>           window in days (default 7; 0 = all time)
   --by <group>         command (default), day, model, or project
 notes:
-  Costs assume $${DEFAULT_PRICE.input} per 1M input tokens and free output; override with jev-axi config set price.input / price.output
+  Estimates use the requested model: Zen free is $0, Zen paid is $${DEFAULT_PRICE.input}/1M input and free output; unknown Zen prices remain unknown unless configured. Legacy calls use configured or default rates. Not Console bills.
   Cached calls are listed separately as saved tokens.
 examples:
   jev-axi usage
@@ -59,18 +58,17 @@ export async function usageCommand(args: string[]): Promise<AxiRenderable> {
   const by = (p.values["--by"] ?? "command") as GroupBy;
   if (!["command", "day", "model", "project"].includes(by)) throw validation(`--by must be command, day, model, or project`);
   const entries = readUsage(days === 0 ? undefined : days);
-  const price = resolvePrices();
   const t = totals(entries);
-  const cost = estimateCost(t.input, t.output, price);
-  const saved = estimateCost(t.saved_input, t.saved_output, price);
+  const { cost, saved, unknown_cost_calls, unknown_saved_calls } = costTotals(entries);
   const window = days === 0 ? "all time" : `last ${days} day${days === 1 ? "" : "s"}`;
-  if (p.bools["--json"]) return JSON.stringify({ window, totals: t, cost, saved, entries }, null, 2);
+  if (p.bools["--json"]) return JSON.stringify({ window, totals: t, cost, saved,
+    ...(unknown_cost_calls ? { unknown_cost_calls } : {}), ...(unknown_saved_calls ? { unknown_saved_calls } : {}), entries }, null, 2);
   if (entries.length === 0) {
     return { usage: `0 calls recorded in the ${window}`, ledger: paths.usageLedger(), help: ["Run any jev-axi command; every API call is logged locally"] };
   }
   const groups: Record<string, unknown>[] = [...groupUsage(entries, by)].map(([key, list]) => {
     const g = totals(list);
-    const c = estimateCost(g.input, g.output, price);
+    const c = costTotals(list).cost;
     return {
       [by]: key,
       calls: g.calls,
@@ -79,7 +77,7 @@ export async function usageCommand(args: string[]): Promise<AxiRenderable> {
       input: g.input,
       output: g.output,
       avg_ms: g.billed_calls ? Math.round(g.ms / g.billed_calls) : 0,
-      cost: formatCost(c),
+      cost: formatEstimatedCost(c),
     };
   });
   if (by === "day") groups.sort((a, b) => String(b[by]).localeCompare(String(a[by])));
@@ -91,7 +89,7 @@ export async function usageCommand(args: string[]): Promise<AxiRenderable> {
     questions: t.questions,
     avg_ms: t.billed_calls ? Math.round(t.ms / t.billed_calls) : 0,
   };
-  out["cost"] = `${formatCost(cost)} estimated at $${price.input}/$${price.output} per 1M in/out${saved ? ` (${formatCost(saved)} saved by cache)` : ""}`;
+  out["cost"] = `${formatEstimatedCost(cost)} estimated by requested model (not Console bills)${t.cached_calls ? ` (${formatEstimatedCost(saved)} saved by cache)` : ""}`;
   out[`by_${by}`] = groups;
   const help: string[] = [];
   help.push(`Run \`jev-axi usage --by ${by === "day" ? "command" : "day"}\` for another view, or \`jev-axi stats\` for lifetime trends`);
@@ -103,8 +101,8 @@ Show or change persistent settings in ${paths.configFile()}.
 keys:
   apiKey           TypeSafe API key (env TYPESAFE_API_KEY and ./.env take precedence)
   model            default model (default ${DEFAULT_MODEL})
-  price.input      USD per 1M input tokens (default ${DEFAULT_PRICE.input})
-  price.output     USD per 1M output tokens (default ${DEFAULT_PRICE.output})
+  price.input      USD per 1M input tokens (legacy default ${DEFAULT_PRICE.input}; Zen free stays free)
+  price.output     USD per 1M output tokens (legacy default ${DEFAULT_PRICE.output}; Zen free stays free)
   act, confirm     band thresholds on confidence (default ${DEFAULT_THRESHOLDS.act} / ${DEFAULT_THRESHOLDS.confirm})
   cacheTtlHours    hours a cached response is reused (default ${DEFAULT_CACHE_TTL_HOURS}; 0 disables the cache)
   updateCheck      false turns off the daily npm registry lookup behind the "update available" notice (default true)
@@ -127,7 +125,7 @@ export async function configCommand(args: string[]): Promise<AxiRenderable> {
   if (action === "set" && value === undefined) throw validation(`config set ${key} needs a value`);
   const next = applyConfig(config, key, action === "set" ? value : undefined);
   writeConfig(next);
-  return { config: `${key} ${action === "set" ? "set" : "unset"}`, ...showConfig(next) };
+  return { config: `${key} ${action === "set" ? "set" : "unset"}`, ...await showConfig(next) };
 }
 
 function applyConfig(c: JevConfig, key: string, value: string | undefined): JevConfig {
@@ -155,15 +153,17 @@ function applyConfig(c: JevConfig, key: string, value: string | undefined): JevC
   return next;
 }
 
-function showConfig(c: JevConfig): Record<string, unknown> {
-  const key = resolveApiKey(c);
+async function showConfig(c: JevConfig): Promise<Record<string, unknown>> {
+  const backend = describeBackend(await resolveBackend(c));
   const update = availableUpdate(c);
   return {
     version: update ? `${VERSION}; ${updateLine(update)}` : VERSION,
     file: paths.configFile(),
-    apiKey: key.key ? `${redactKey(key.key)} (from ${key.file ?? key.source})` : "missing",
-    model: resolveModel(undefined, c),
-    price: `$${resolvePrices(c).input}/1M in, $${resolvePrices(c).output}/1M out${c.price?.input === undefined && c.price?.output === undefined ? " (default)" : ""}`,
+    backend: backend.backend,
+    apiKey: backend.backend === "opencode-zen" ? "TypeSafe-only (not used for Zen)" : backend.credential === "ok" ? `configured (from ${backend.source})` : "missing",
+    credential: backend.credential === "ok" ? `ok (${backend.source})` : "missing",
+    model: backend.model,
+    price: `$${resolvePrices(c).input}/1M in, $${resolvePrices(c).output}/1M out (legacy rates; Zen free $0, paid default $${DEFAULT_PRICE.input}/1M input, unknown models need explicit prices; estimates not Console bills)`,
     thresholds: `act >= ${c.thresholds?.act ?? DEFAULT_THRESHOLDS.act}, confirm >= ${c.thresholds?.confirm ?? DEFAULT_THRESHOLDS.confirm}`,
     cache: `${cacheCount()} responses in ${paths.cacheDir()}, reused for ${resolveCacheTtlHours(c)}h`,
     ...(update ? { help: [updateHelp(update)] } : {}),
@@ -171,9 +171,8 @@ function showConfig(c: JevConfig): Record<string, unknown> {
 }
 
 export function cacheCount(): number {
-  const dir = paths.cacheDir();
-  if (!existsSync(dir)) return 0;
-  return readdirSync(dir).filter((f) => f.endsWith(".json") && f !== "aliases.json").length;
+  const stats = cacheStats();
+  return stats.entries - stats.legacyEntries;
 }
 
 export const CACHE_HELP = `usage: jev-axi cache [clear [--stale]]
@@ -225,6 +224,7 @@ supervise  Stop and PostToolUse hooks for Claude Code or Codex: when the agent e
          blocked on a person. Warn-only unless --block. See \`jev-axi hook --help\`.
 agent    Claude Code subagent \`jev-explore\` that ranks files with jev-axi before reading them, for broad exploration.
          Claude Code tends to explore inside subagents, which never see skills or session hooks; this puts jev-axi there.
+         Use a reviewed fork build and launcher; ask the user before activating the skill (see docs/OPENCODE_ZEN.md).
 git-hooks  pre-commit and commit-msg hooks in the current repository: blocks commits that add credentials (found
          locally), warns about risky or unfocused diffs and messages that don't match them. See \`jev-axi hook --help\`.
 flags:
@@ -258,7 +258,7 @@ export async function setupCommand(args: string[]): Promise<AxiRenderable> {
       ? []
       : [
           "Restart the agent session to activate it",
-          "Commands and edits outside the project are sent to TypeSafe's API with secrets redacted; routine calls never leave the machine",
+          "Commands and edits outside the project are sent to the selected provider with recognizable secrets redacted; routine calls never leave the machine",
           "Test it: echo '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"rm -rf ~/\"}}' | jev-axi hook pre-tool-use --explain",
         ];
     return { safety: { status, agent, scope, file }, ...(help.length ? { help } : {}) };
@@ -272,7 +272,7 @@ export async function setupCommand(args: string[]): Promise<AxiRenderable> {
       ? []
       : [
           "Restart the agent session to activate it",
-          "The job, a bounded diff, and recent tool calls are sent to TypeSafe's API with secrets redacted",
+          "The job, a bounded diff, and recent tool calls are sent to the selected provider with recognizable secrets redacted",
           "The scores are not calibrated for every project: check `jev-axi stats` after a few sessions before turning on --block",
         ];
     return { supervise: { status, agent, mode: p.bools["--block"] ? "block" : "warn", scope, file }, ...(help.length ? { help } : {}) };
@@ -280,7 +280,7 @@ export async function setupCommand(args: string[]): Promise<AxiRenderable> {
   if (action === "agent") {
     const { file, status } = configureAgent(p.bools["--project"], p.bools["--remove"], p.bools["--replace-explore"]);
     const help = /installed|updated/.test(status)
-      ? ["Restart Claude Code to load it", "It preloads the jev-axi skill; install that too: npx skills add shiftynick/jev-axi --skill jev-axi"]
+      ? ["Restart Claude Code to load it", "It preloads the jev-axi skill; ask the user before activating the reviewed fork skill (see docs/OPENCODE_ZEN.md)"]
       : [];
     return { agent: { status, scope, file }, ...(help.length ? { help } : {}) };
   }
@@ -319,8 +319,8 @@ export function todayUsageLine(): string {
   const entries = readUsage(1);
   if (entries.length === 0) return "0 calls in the last 24h";
   const t = totals(entries);
-  const cost = estimateCost(t.input, t.output);
-  return `${t.calls} calls, ${formatTokens(t.input)} in / ${formatTokens(t.output)} out, ${t.cached_calls} cached, ${formatCost(cost)} in the last 24h`;
+  const { cost } = costTotals(entries);
+  return `${t.calls} calls, ${formatTokens(t.input)} in / ${formatTokens(t.output)} out, ${t.cached_calls} cached, ${formatEstimatedCost(cost)} in the last 24h`;
 }
 
 export { round };

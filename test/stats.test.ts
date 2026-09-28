@@ -98,4 +98,23 @@ describe("stats command", () => {
     expect(out).toMatch(/biggest_call: "?diff on/);
     expect(out).toMatch(/cache: "?50% hit rate/);
   });
+
+  it("renders unknown lifetime, breakdown, and projected spend without a numeric cost trend", async () => {
+    const folder = join(dir, "config", "jev-axi", "stats");
+    mkdirSync(folder, { recursive: true });
+    const ts = new Date().toISOString();
+    const rows: UsageEntry[] = [
+      { ts, cmd: "known", model: "jev-1.13", backend: "opencode-zen", requestedModel: "jev-1.13-free", in: 100, out: 10, ms: 1, q: 1, cached: false, project: "alpha" },
+      { ts, cmd: "mystery", model: "future", backend: "opencode-zen", requestedModel: "future", in: 100, out: 10, ms: 1, q: 1, cached: false, project: "beta" },
+    ];
+    writeFileSync(join(folder, "usage.jsonl"), rows.map((r) => JSON.stringify(r)).join("\n") + "\n");
+    await main(["stats"], stdout);
+    expect(out).toMatch(/lifetime: .*unknown/);
+    expect(out).toMatch(/cost: .*unknown.*projected unknown/);
+    expect(out).toContain("trend_calls_30d:");
+    expect(out).not.toContain("trend_cost_30d: ▁▁▁▁");
+    expect(out).toMatch(/mystery[^\n]*unknown/);
+    expect(out).toMatch(/beta[^\n]*unknown/);
+    expect(out).not.toContain("NaN");
+  });
 });

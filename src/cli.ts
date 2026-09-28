@@ -1,5 +1,7 @@
 import { AxiError, exitCodeForError, runAxiCli } from "axi-sdk-js";
 import { encode } from "@toon-format/toon";
+import { withEvaluationContext } from "./client.js";
+import { checkBackend } from "./backend.js";
 import { renderHelp, renderWithHelp, type Renderable } from "./commands/common.js";
 import { availableUpdate, updateHelp } from "./update.js";
 import { VERSION } from "./version.js";
@@ -43,6 +45,8 @@ safety[5]: guard-exec, setup safety, setup supervise, setup git-hooks, hook
 meta[7]: (none)=status, models, usage, stats, cache, config, setup
 global flags:
   --json, --full, --model <name>, --no-cache, --act <p>, --confirm <p>, --help, -v/--version
+preflight:
+  jev-axi --check-backend   resolve backend and credential locally; print its name (no network)
 state:
   --state <path|->, --text "<s>", --state-json '<json>'; piped stdin is used when none given
 bands:
@@ -85,7 +89,7 @@ export const HELP: Record<string, string> = {
 
 type Cmd = (args: string[]) => Promise<Renderable>;
 const wrap = (cmd: Cmd) => async (args: string[]) => {
-  const out = await cmd(args);
+  const out = await withEvaluationContext(() => cmd(args));
   return typeof out === "string" ? out : renderWithHelp(out);
 };
 
@@ -105,6 +109,35 @@ export function formatError(error: unknown): { output: string; exitCode: number 
 
 export async function main(argv = process.argv.slice(2), stdout?: { write: (chunk: string) => unknown }): Promise<void> {
   const target = (stdout ?? process.stdout) as { write: (chunk: string) => unknown; on?: (...args: any[]) => unknown };
+  // Do not interpret arguments belonging to a guard-exec child process.
+  const boundary = argv[0] === "guard-exec" ? argv.indexOf("--") : -1;
+  const preflight = boundary === -1 ? argv : argv.slice(0, boundary);
+  if (preflight.includes("--check-backend")) {
+    if (argv.length !== 1 || argv[0] !== "--check-backend") {
+      process.stderr.write("Invalid --check-backend combination\n");
+      process.exitCode = 2;
+      return;
+    }
+    // Node 22 emits this one warning when Console credential discovery imports node:sqlite.
+    // Keep all unrelated warnings intact and restore the original emitter after preflight.
+    const emitWarning = process.emitWarning;
+    process.emitWarning = ((warning: string | Error, type?: string | { type?: string }, ...rest: unknown[]) => {
+      const message = typeof warning === "string" ? warning : warning.message;
+      const name = typeof type === "string" ? type : type?.type ?? (warning instanceof Error ? warning.name : undefined);
+      if (name === "ExperimentalWarning" && message === "SQLite is an experimental feature and might change at any time") return;
+      return Reflect.apply(emitWarning, process, [warning, type, ...rest]);
+    }) as typeof process.emitWarning;
+    try {
+      try { target.write(`${await checkBackend()}\n`); }
+      catch (error) {
+        process.stderr.write(error instanceof AxiError && error.code === "VALIDATION_ERROR"
+          ? "Invalid backend configuration\n"
+          : "Backend credential unavailable; configure OpenCode Console / OPENCODE_API_KEY or the selected backend credential; use a compatible runtime for Console store discovery.\n");
+        process.exitCode = 1;
+      }
+    } finally { process.emitWarning = emitWarning; }
+    return;
+  }
   // Commands that print nothing (hooks, guard-exec running a command) must not add a blank line
   // to output that belongs to someone else.
   const sink = {

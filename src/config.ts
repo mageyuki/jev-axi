@@ -182,6 +182,5 @@ export function resolvePrices(config = readConfig()): Required<Prices> {
 }
 
 export function redactKey(key: string): string {
-  if (key.length <= 12) return "****";
-  return `${key.slice(0, 10)}…${key.slice(-4)}`;
+  return key ? "configured" : "missing";
 }

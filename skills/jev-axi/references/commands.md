@@ -269,6 +269,7 @@ supervise  Stop and PostToolUse hooks for Claude Code or Codex: when the agent e
          blocked on a person. Warn-only unless --block. See `jev-axi hook --help`.
 agent    Claude Code subagent `jev-explore` that ranks files with jev-axi before reading them, for broad exploration.
          Claude Code tends to explore inside subagents, which never see skills or session hooks; this puts jev-axi there.
+         Use a reviewed fork build and launcher; ask the user before activating the skill (see docs/OPENCODE_ZEN.md).
 git-hooks  pre-commit and commit-msg hooks in the current repository: blocks commits that add credentials (found
          locally), warns about risky or unfocused diffs and messages that don't match them. See `jev-axi hook --help`.
 flags:
@@ -299,6 +300,7 @@ supervise  Stop and PostToolUse hooks for Claude Code or Codex: when the agent e
          blocked on a person. Warn-only unless --block. See `jev-axi hook --help`.
 agent    Claude Code subagent `jev-explore` that ranks files with jev-axi before reading them, for broad exploration.
          Claude Code tends to explore inside subagents, which never see skills or session hooks; this puts jev-axi there.
+         Use a reviewed fork build and launcher; ask the user before activating the skill (see docs/OPENCODE_ZEN.md).
 git-hooks  pre-commit and commit-msg hooks in the current repository: blocks commits that add credentials (found
          locally), warns about risky or unfocused diffs and messages that don't match them. See `jev-axi hook --help`.
 flags:
@@ -344,6 +346,7 @@ supervise  Stop and PostToolUse hooks for Claude Code or Codex: when the agent e
          blocked on a person. Warn-only unless --block. See `jev-axi hook --help`.
 agent    Claude Code subagent `jev-explore` that ranks files with jev-axi before reading them, for broad exploration.
          Claude Code tends to explore inside subagents, which never see skills or session hooks; this puts jev-axi there.
+         Use a reviewed fork build and launcher; ask the user before activating the skill (see docs/OPENCODE_ZEN.md).
 git-hooks  pre-commit and commit-msg hooks in the current repository: blocks commits that add credentials (found
          locally), warns about risky or unfocused diffs and messages that don't match them. See `jev-axi hook --help`.
 flags:
@@ -374,6 +377,7 @@ supervise  Stop and PostToolUse hooks for Claude Code or Codex: when the agent e
          blocked on a person. Warn-only unless --block. See `jev-axi hook --help`.
 agent    Claude Code subagent `jev-explore` that ranks files with jev-axi before reading them, for broad exploration.
          Claude Code tends to explore inside subagents, which never see skills or session hooks; this puts jev-axi there.
+         Use a reviewed fork build and launcher; ask the user before activating the skill (see docs/OPENCODE_ZEN.md).
 git-hooks  pre-commit and commit-msg hooks in the current repository: blocks commits that add credentials (found
          locally), warns about risky or unfocused diffs and messages that don't match them. See `jev-axi hook --help`.
 flags:
@@ -440,7 +444,7 @@ flags:
   --days <n>           window in days (default 7; 0 = all time)
   --by <group>         command (default), day, model, or project
 notes:
-  Costs assume $0.042 per 1M input tokens and free output; override with jev-axi config set price.input / price.output
+  Estimates use the requested model: Zen free is $0, Zen paid is $0.042/1M input and free output; unknown Zen prices remain unknown unless configured. Legacy calls use configured or default rates. Not Console bills.
   Cached calls are listed separately as saved tokens.
 examples:
   jev-axi usage
@@ -553,7 +557,7 @@ examples:
 
 ```
 usage: jev-axi models
-List the models available to this API key.
+List the models available on the selected backend (Zen catalog requires no key).
 ```
 
 ## config
@@ -564,8 +568,8 @@ Show or change persistent settings in ~/.config/jev-axi/config.json.
 keys:
   apiKey           TypeSafe API key (env TYPESAFE_API_KEY and ./.env take precedence)
   model            default model (default jev-latest)
-  price.input      USD per 1M input tokens (default 0.042)
-  price.output     USD per 1M output tokens (default 0)
+  price.input      USD per 1M input tokens (legacy default 0.042; Zen free stays free)
+  price.output     USD per 1M output tokens (legacy default 0; Zen free stays free)
   act, confirm     band thresholds on confidence (default 0.75 / 0.45)
   cacheTtlHours    hours a cached response is reused (default 24; 0 disables the cache)
   updateCheck      false turns off the daily npm registry lookup behind the "update available" notice (default true)

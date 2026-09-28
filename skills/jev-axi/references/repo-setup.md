@@ -5,8 +5,9 @@ call, before a commit, on every pull request, around risky scripts. This guide c
 integration: what it's for, how to install and check it, and how to remove it.
 
 Only install what the user has chosen: when the request is general, ask which integrations they
-want before installing anything (see [Ask before installing](#ask-before-installing)). Each one sends text to TypeSafe's API (see
-"What leaves the machine" in each section) and needs an API key wherever it runs.
+want before installing anything (see [Ask before installing](#ask-before-installing)). Each one may
+send text to the selected provider (see "What leaves the machine" in each section).
+Review [fork setup](../../../docs/OPENCODE_ZEN.md) for backend and credential rules first.
 
 ## Contents
 
@@ -37,7 +38,7 @@ want before installing anything (see [Ask before installing](#ask-before-install
 
 A general request ("set up jev-axi here", "add jev to this repo") does not say which of these the
 user wants, and it is not permission to install them all. Each one changes the repository or the
-agent's behavior and sends different data to TypeSafe, so the choice is the user's.
+agent's behavior and sends different data to the selected provider, so the choice is the user's.
 
 1. Look first, so the question is specific: is it a git repository, is there `.github/workflows/`,
    which agents are configured (`.claude/`, `.codex/`), and what does `jev-axi setup status --project`
@@ -56,14 +57,16 @@ install those. Don't add others alongside them; mention one if it clearly fits, 
 
 ## Before installing anything
 
-1. **Key.** Local integrations (safety and supervision hooks, git hooks, `guard-exec`) read the key from
-   `TYPESAFE_API_KEY`, a `.env` file in the working directory, or `jev-axi config set apiKey`.
-   The GitHub Action reads a repository secret. Run `jev-axi` to see `key: ok` or `key: missing`.
-2. **Installed CLI.** Hooks call `jev-axi` on PATH: `npm install -g jev-axi`. Git hooks skip
-   quietly when it's missing, so a teammate without it isn't blocked.
+1. **Credential.** Choose a backend first. Zen uses `OPENCODE_API_KEY` or a discoverable
+   OpenCode Console SQLite credential; TypeSafe uses `TYPESAFE_API_KEY`, `.env.local`/`.env`,
+   or config; Laya can use a local placeholder. The GitHub Action uses its configured secret.
+   `jev-axi --check-backend` resolves a credential locally but does not validate it remotely.
+2. **Reviewed CLI.** Build this fork with `pnpm install && pnpm build` and point a user-controlled
+   `jev-axi` launcher on PATH at its `dist/bin/jev-axi.js`. Do not substitute a registry release.
+   Git hooks skip quietly when the launcher is missing, so a teammate without it isn't blocked.
 3. **Data.** Tell the user what each integration sends (listed below) and confirm that's
-   acceptable for the repository. Credentials in known formats are redacted first, but source
-   code, diffs, and logs are sent as they are.
+   acceptable for the repository and selected provider. Credentials in known formats are redacted
+   first, but source code, diffs, and logs can still contain secrets. Never send secrets.
 4. **Failure mode.** Every integration fails open by default: no key, no network, or a timeout
    means the normal flow continues. Say so if the user expects a hard gate, and point to the
    fail-closed options.
@@ -253,8 +256,8 @@ git diff main..HEAD | jev-axi recipe run release-risk
 
 ## Helping agents use jev-axi
 
-- **Skill:** `npx skills add shiftynick/jev-axi --skill jev-axi` so agents know when and how to use
-  jev-axi and never send secrets. Add `--agent '*'` for all supported agents.
+- **Skill:** ask the user whether to activate the reviewed fork's `skills/jev-axi`
+  for their chosen agent and scope. It teaches when to use jev-axi and never to send secrets.
 - **Session context:** `jev-axi setup hooks --project` adds SessionStart hooks (Claude Code, Codex,
   OpenCode) that start each session with jev-axi's status view.
 - **Explorer subagent (Claude Code):** `jev-axi setup agent --project` installs `jev-explore`, which

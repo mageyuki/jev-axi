@@ -71,5 +71,5 @@ export function updateLine(latest: string): string {
 
 /** Worded for agents: report it, do not act on it. */
 export function updateHelp(latest: string): string {
-  return `jev-axi ${latest} is available (this is ${VERSION}). Do not upgrade on your own; mention it to the user once in your final answer: \`npm install -g jev-axi@latest\``;
+  return `jev-axi ${latest} is available (this is ${VERSION}). Do not upgrade on your own; mention it to the user once in your final answer. Keep using the reviewed fork until the user approves a reviewed fork update.`;
 }

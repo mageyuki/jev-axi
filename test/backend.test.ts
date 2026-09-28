@@ -77,17 +77,20 @@ describe("backend selection and credential boundary", () => {
     expect(discovery).not.toHaveBeenCalled();
   });
 
-  it("automatic Zen uses the store when the environment key is absent", async ctx => {
+  it("automatic Zen prefers the environment key over a store row, then uses the store", async ctx => {
     delete process.env.JEV_BACKEND;
     await dbWith([["opencode", JSON.stringify({ type: "key", key: "synthetic-store" })]], ctx);
+    process.env.OPENCODE_API_KEY = "  synthetic-env  ";
+    expect((await resolveBackend({})).credential()).toBe("synthetic-env");
+    delete process.env.OPENCODE_API_KEY;
     expect((await resolveBackend({})).credential()).toBe("synthetic-store");
     expect(discovery).not.toHaveBeenCalled();
   });
 
-  it.each([
-    [{ type: "key", key: "  synthetic-first-key  " }, "synthetic-first-key"],
-    [{ type: "oauth", key: " ", access: "  synthetic-first-access  " }, "synthetic-first-access"],
-  ])("skips unusable rows and takes the first later usable Console record", async (first, expected, ctx) => {
+  it.for([
+    { first: { type: "key", key: "  synthetic-first-key  " }, expected: "synthetic-first-key" },
+    { first: { type: "oauth", key: " ", access: "  synthetic-first-access  " }, expected: "synthetic-first-access" },
+  ])("skips unusable rows and takes the first later usable Console record", async ({ first, expected }, ctx) => {
     delete process.env.JEV_BACKEND;
     const file = await dbWith([
       ["other", JSON.stringify({ type: "key", key: "wrong-integration" })],

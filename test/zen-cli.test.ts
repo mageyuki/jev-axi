@@ -61,7 +61,7 @@ describe("Zen command binding", () => {
   });
 
   it("routes ask mixed shapes, rate score-array, and pick choice-map through Zen", async () => {
-    const mixed = { c: { type: "choice", criteria: { a: null, b: null } }, s: { type: "score", criteria: ["low", "high"] }, n: { type: "noul", instructions: "yes?" } };
+    const mixed = { c: { type: "choice", instructions: "Choose one", criteria: { a: null, b: null } }, s: { type: "score", instructions: "Rate severity", criteria: ["low", "high"] }, n: { type: "noul", instructions: "yes?" } };
     await main(["ask", "--questions", JSON.stringify(mixed), "--text", "hello"], stdout);
     expect(requests).toHaveLength(1);
     expect(requests[0]!.url).toBe("https://opencode.ai/zen/v1/systemone");

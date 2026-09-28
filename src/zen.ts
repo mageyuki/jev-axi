@@ -17,6 +17,8 @@ export function validateZenQuestions(questions: QuestionMap): void {
   if (!object(questions) || Object.keys(questions).length === 0) throw validation("Invalid Zen questions");
   for (const question of Object.values(questions)) {
     if (!object(question)) throw validation("Invalid Zen question");
+    if (!(typeof question.instructions === "string" && question.instructions.length > 0) &&
+        !(question.instructions !== null && typeof question.instructions === "object")) throw validation("Invalid Zen instructions");
     if (question.type === "score") {
       if (!Array.isArray(question.criteria) || question.criteria.length < 2) throw validation("Zen score criteria must be an array of at least two levels");
     } else if (question.type === "choice") {

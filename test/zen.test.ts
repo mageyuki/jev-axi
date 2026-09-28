@@ -7,8 +7,8 @@ import { makeEnvelope, scriptedFetch } from "./helpers/systemone.js";
 const credential = "synthetic-console-credential-marker";
 const questions: QuestionMap = {
   n: { type: "noul", instructions: { check: ["a", 1] } },
-  c: { type: "choice", criteria: { a: null, b: "B" } },
-  s: { type: "score", criteria: ["low", "high"] },
+  c: { type: "choice", instructions: "Choose the best option", criteria: { a: null, b: "B" } },
+  s: { type: "score", instructions: "Score the text", criteria: ["low", "high"] },
 };
 const request = { model: "jev-1.13-free", state: { text: ["hello", 1] }, questions };
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
@@ -45,6 +45,18 @@ describe("Zen wire", () => {
     const wire = scriptedFetch([]);
     expect(() => validateZenQuestions(bad)).toThrow();
     await expect(evaluateZen(await backend(), { ...request, questions: bad }, { fetch: wire.fetch })).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    expect(wire.requests).toHaveLength(0);
+  });
+
+  it.each([
+    ["missing", { type: "noul" }],
+    ["null", { type: "noul", instructions: null }],
+    ["number", { type: "noul", instructions: 0 }],
+    ["empty string", { type: "noul", instructions: "" }],
+  ])("rejects %s Zen instructions before fetch", async (_, question) => {
+    const bad = { n: question } as unknown as QuestionMap;
+    const wire = scriptedFetch([]);
+    await expect(evaluateZen(await backend(), { ...request, questions: bad }, { fetch: wire.fetch, maxRetries: 0 })).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
     expect(wire.requests).toHaveLength(0);
   });
 

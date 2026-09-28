@@ -4,6 +4,7 @@ import { AxiError, validation } from "./errors.js";
 import type { QuestionMap, SystemOneEnvelope } from "./evaluation-types.js";
 
 const URL = "https://opencode.ai/zen/v1/systemone";
+const MAX_RESPONSE_BYTES = 1_048_576;
 const object = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
 const probability = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
 const invalid = (): never => { throw new AxiError("Invalid Zen response envelope", "API_ERROR"); };
@@ -122,8 +123,12 @@ async function responseText(response: Response, signal: AbortSignal): Promise<st
       const next = await Promise.race([reader.read(), aborted]);
       if (signal.aborted) throw new Error("aborted");
       if (next.done) break;
-      chunks.push(next.value);
       size += next.value.byteLength;
+      if (size > MAX_RESPONSE_BYTES) {
+        await reader.cancel().catch(() => {});
+        throw new AxiError("Zen response exceeds size limit", "API_ERROR");
+      }
+      chunks.push(next.value);
     }
     return new TextDecoder().decode(Buffer.concat(chunks, size));
   } finally {

@@ -86,6 +86,24 @@ describe("Zen wire", () => {
     expect(() => validateZenResponse(answer, questions, credential)).toThrow();
   });
 
+  it("rejects an oversized Zen response and cancels it without exposing its contents", async () => {
+    const marker = "sensitive-body-marker";
+    let cancelled = false;
+    const bytes = new Uint8Array(1_048_577);
+    bytes.set(new TextEncoder().encode(`${marker}-${credential}`));
+    const response = new Response(new ReadableStream<Uint8Array>({
+      start(controller) { controller.enqueue(bytes); },
+      cancel() { cancelled = true; },
+    }));
+    const wire = scriptedFetch([response]);
+    const error = await evaluateZen(await backend(), request, { fetch: wire.fetch, timeoutMs: 50, maxRetries: 0 }).catch(e => e);
+    expect(error.code).toBe("API_ERROR");
+    expect(JSON.stringify(error)).not.toContain(marker);
+    expect(JSON.stringify(error)).not.toContain(credential);
+    expect(cancelled).toBe(true);
+    expect(wire.requests).toHaveLength(1);
+  });
+
   it("rejects a decoded credential containing a quotation mark before returning a Zen answer", async () => {
     const quotedCredential = 'synthetic"quoted-canary';
     process.env.JEV_BACKEND = "opencode-zen";

@@ -9,7 +9,7 @@ vi.mock("node:fs", async (importOriginal) => {
 
 describe("response cache without O_NOFOLLOW", () => {
   it.skipIf(process.platform === "win32")("misses rather than opening an entry without no-follow protection", () => {
-    const scope = cacheScope({ name: "typesafe", endpoint: "https://api.typesafe.ai/v1/systemone", defaultModel: "free", hasCredential: false, credentialSource: "none", credential: () => undefined });
+    const scope = cacheScope({ name: "typesafe", endpoint: "https://api.typesafe.ai/v1/systemone", defaultModel: "free", hasCredential: false, credentialSource: "missing", credential: () => undefined });
     if (!scope) throw Error("scope missing");
     const now = Date.parse("2026-09-17T12:00:00Z");
     const questions = { q: { type: "noul" as const, instructions: "Is this relevant?" } };

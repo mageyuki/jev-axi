@@ -26,8 +26,25 @@ export function validateZenQuestions(questions: QuestionMap): void {
 
 export function assertNoCredentialEcho(value: unknown, credential: string): void {
   if (!credential) return;
+  const seen = new WeakSet<object>();
+  const scan = (item: unknown): void => {
+    if (typeof item === "string") {
+      if (item.includes(credential)) invalid();
+    } else if (item !== null && typeof item === "object") {
+      if (seen.has(item)) invalid();
+      seen.add(item);
+      if (Array.isArray(item)) {
+        for (const entry of item) scan(entry);
+      } else {
+        for (const [key, entry] of Object.entries(item)) {
+          if (key.includes(credential)) invalid();
+          scan(entry);
+        }
+      }
+    }
+  };
   try {
-    if (JSON.stringify(value)?.includes(credential)) throw invalid();
+    scan(value);
   } catch {
     invalid();
   }

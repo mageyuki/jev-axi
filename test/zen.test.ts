@@ -86,6 +86,19 @@ describe("Zen wire", () => {
     expect(() => validateZenResponse(answer, questions, credential)).toThrow();
   });
 
+  it("rejects a decoded credential containing a quotation mark before returning a Zen answer", async () => {
+    const quotedCredential = 'synthetic"quoted-canary';
+    process.env.JEV_BACKEND = "opencode-zen";
+    process.env.OPENCODE_API_KEY = quotedCredential;
+    const envelope = makeEnvelope(questions);
+    (envelope.answers.c as { extra?: string }).extra = `echo-${quotedCredential}`;
+    const wire = scriptedFetch([json(envelope)]);
+    const error = await evaluateZen(await resolveBackend({}), request, { fetch: wire.fetch, maxRetries: 0 }).catch(e => e);
+    expect(error.code).toBe("API_ERROR");
+    expect(error.message).not.toContain(quotedCredential);
+    expect(wire.requests).toHaveLength(1);
+  });
+
   it.each([
     [401, "AUTH_REQUIRED"], [403, "API_REJECTED"], [400, "VALIDATION_ERROR"],
     [422, "VALIDATION_ERROR"], [404, "API_ERROR"],

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { closeSync, constants, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { EntryType } from "@typesafe-ai/sdk";
 import type { BackendName, ResolvedBackend } from "./backend.js";
@@ -74,11 +74,15 @@ function files(dir: string): string[] {
   try { return readdirSync(dir); } catch { return []; }
 }
 function parse(file: string): unknown {
-  if (!safe(file, "file") || constants.O_NOFOLLOW === undefined) return undefined;
+  if (!safe(file, "file")) return undefined;
   let fd: number;
-  try { fd = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW); } catch { return undefined; }
-  try { return JSON.parse(readFileSync(fd, "utf8")); } catch { return undefined; }
-  finally { closeSync(fd); }
+  const noFollow = typeof constants.O_NOFOLLOW === "number" && constants.O_NOFOLLOW > 0 ? constants.O_NOFOLLOW : 0;
+  try { fd = openSync(file, constants.O_RDONLY | noFollow); } catch { return undefined; }
+  try {
+    if (!fstatSync(fd).isFile()) return undefined;
+    return JSON.parse(readFileSync(fd, "utf8"));
+  } catch { return undefined; }
+  finally { try { closeSync(fd); } catch { /* best effort */ } }
 }
 function aliases(scope: CacheScope): Record<string, string> {
   if (!validScope(scope)) return {};

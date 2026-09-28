@@ -69,21 +69,29 @@ describe("backend selection and credential boundary", () => {
   it("automatic Zen uses the environment key without store discovery; absent credential selects TypeSafe", async () => {
     delete process.env.JEV_BACKEND;
     process.env.JEV_OPENCODE_DB = join(tmpdir(), "absent.db");
-    process.env.OPENCODE_API_KEY = "  synthetic-env  ";
-    expect((await resolveBackend()).credential()).toBe("synthetic-env");
+    process.env.OPENCODE_API_KEY = "  synthetic-env-credential  ";
+    expect((await resolveBackend()).credential()).toBe("synthetic-env-credential");
     delete process.env.OPENCODE_API_KEY;
     process.env.JEV_OPENCODE_DB = "";
     expect((await resolveBackend({})).name).toBe("typesafe");
     expect(discovery).not.toHaveBeenCalled();
   });
 
+  it("does not automatically select Zen for a short Console environment credential", async () => {
+    delete process.env.JEV_BACKEND;
+    process.env.JEV_OPENCODE_DB = "";
+    process.env.OPENCODE_API_KEY = "short";
+    expect((await resolveBackend({})).name).toBe("typesafe");
+    expect(discovery).not.toHaveBeenCalled();
+  });
+
   it("automatic Zen prefers the environment key over a store row, then uses the store", async ctx => {
     delete process.env.JEV_BACKEND;
-    await dbWith([["opencode", JSON.stringify({ type: "key", key: "synthetic-store" })]], ctx);
-    process.env.OPENCODE_API_KEY = "  synthetic-env  ";
-    expect((await resolveBackend({})).credential()).toBe("synthetic-env");
+    await dbWith([["opencode", JSON.stringify({ type: "key", key: "synthetic-store-credential" })]], ctx);
+    process.env.OPENCODE_API_KEY = "  synthetic-env-credential  ";
+    expect((await resolveBackend({})).credential()).toBe("synthetic-env-credential");
     delete process.env.OPENCODE_API_KEY;
-    expect((await resolveBackend({})).credential()).toBe("synthetic-store");
+    expect((await resolveBackend({})).credential()).toBe("synthetic-store-credential");
     expect(discovery).not.toHaveBeenCalled();
   });
 
@@ -96,6 +104,7 @@ describe("backend selection and credential boundary", () => {
       ["other", JSON.stringify({ type: "key", key: "wrong-integration" })],
       ["opencode", "{"], ["opencode", JSON.stringify({ type: "unknown", key: "wrong-type" })],
       ["opencode", JSON.stringify({ type: "key", key: "  " })],
+      ["opencode", JSON.stringify({ type: "key", key: "short" })],
       ["opencode", JSON.stringify({ type: "oauth", key: "", access: " " })],
       ["opencode", JSON.stringify(first)],
       ["opencode", JSON.stringify({ type: "key", key: "synthetic-later" })],
@@ -168,7 +177,7 @@ describe("backend selection and credential boundary", () => {
     expect(resolveBackendModel(newer)).toBe("custom-model");
     expect(resolveBackendModel(newer, "flag-model")).toBe("flag-model");
     process.env.JEV_BACKEND = "opencode-zen";
-    process.env.OPENCODE_API_KEY = "synthetic";
+    process.env.OPENCODE_API_KEY = "synthetic-console-credential";
     process.env.JEV_MODEL = "   ";
     expect(resolveBackendModel(await resolveBackend({ model: "config-model" }))).toBe("jev-1.13-free");
   });

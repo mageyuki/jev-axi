@@ -98,14 +98,16 @@ describe("Zen wire", () => {
     expect(() => validateZenResponse(answer, questions, credential)).toThrow();
   });
 
-  it("accepts a normal Zen envelope with a short Console credential", async () => {
+  it("rejects a short Console credential before contacting Zen without exposing it", async () => {
     process.env.JEV_BACKEND = "opencode-zen";
     process.env.OPENCODE_API_KEY = "a";
-    const envelope = makeEnvelope(questions);
-    const wire = scriptedFetch([json(envelope)]);
-    const result = await evaluateZen(await resolveBackend({}), request, { fetch: wire.fetch, maxRetries: 0 });
-    expect(result).toEqual(envelope);
-    expect(wire.requests).toHaveLength(1);
+    process.env.JEV_OPENCODE_DB = "";
+    const wire = scriptedFetch([]);
+    const error = await evaluateZen(await resolveBackend({}), request, { fetch: wire.fetch, maxRetries: 0 }).catch(e => e);
+    expect(error.code).toBe("AUTH_REQUIRED");
+    expect(error.message).toBe("OpenCode Console credential required: set OPENCODE_API_KEY or use a compatible Node 22.13+ runtime for Console store discovery");
+    expect(error.message).not.toContain("TYPESAFE_API_KEY");
+    expect(wire.requests).toHaveLength(0);
   });
 
   it("rejects a 16-character credential echoed in a decoded answer without leaking it", async () => {

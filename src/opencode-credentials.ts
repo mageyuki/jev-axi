@@ -34,7 +34,9 @@ export async function resolveOpenCodeDbPath(env: NodeJS.ProcessEnv = process.env
 }
 
 function usable(value: unknown): string | undefined {
-  return typeof value === "string" ? value.trim() || undefined : undefined;
+  if (typeof value !== "string") return undefined;
+  const key = value.trim();
+  return key.length >= 16 ? key : undefined;
 }
 
 /** No store access on the environment-key path; unusable stores are silent misses. */

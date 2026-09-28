@@ -10,42 +10,15 @@ import {
   UnprocessableEntityError,
   type Fetch,
   type EntryType,
-  type Question,
   type Usage,
 } from "@typesafe-ai/sdk";
 import { AxiError } from "./errors.js";
 import { ensureDir, keySearchDescription, paths, readConfig, resolveApiKey, resolveCacheTtlHours, resolveModel, resolveThresholds } from "./config.js";
 import { projectName, recordUsage, type BandCounts } from "./usage.js";
 import { bandForConfidence, bandForNoul } from "./bands.js";
+import type { Answer, EvalResult, QuestionMap } from "./evaluation-types.js";
 
-export type QuestionMap = Record<string, Question>;
-
-export interface ChoiceAnswer {
-  type: "choice";
-  choice: string;
-  probabilities: Record<string, number>;
-  confidence: number;
-}
-export interface ScoreAnswer {
-  type: "score";
-  score: number;
-  legend: Record<string, string>;
-  probabilities: Record<string, number>;
-  confidence: number;
-}
-export interface NoulAnswer {
-  type: "noul";
-  noul: number;
-}
-export type Answer = ChoiceAnswer | ScoreAnswer | NoulAnswer;
-
-export interface EvalResult {
-  model: string;
-  answers: Record<string, Answer>;
-  usage: Usage;
-  ms: number;
-  cached: boolean;
-}
+export type { QuestionMap, ChoiceAnswer, ScoreAnswer, NoulAnswer, Answer, EvalResult } from "./evaluation-types.js";
 
 export interface EvalOptions {
   command: string;

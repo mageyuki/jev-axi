@@ -24,7 +24,7 @@ import { validation } from "../errors.js";
 import { availableUpdate, refreshUpdateCheck, updateHelp, updateLine } from "../update.js";
 import { VERSION } from "../version.js";
 import { round } from "../format.js";
-import { estimateCost, formatCost, formatTokens, groupUsage, readUsage, totals, type GroupBy } from "../usage.js";
+import { costTotals, formatEstimatedCost, formatTokens, groupUsage, readUsage, totals, type GroupBy } from "../usage.js";
 
 export const MODELS_HELP = `usage: jev-axi models
 List the models available on the selected backend (Zen catalog requires no key).
@@ -45,7 +45,7 @@ flags:
   --days <n>           window in days (default 7; 0 = all time)
   --by <group>         command (default), day, model, or project
 notes:
-  Costs assume $${DEFAULT_PRICE.input} per 1M input tokens and free output; override with jev-axi config set price.input / price.output
+  Estimates use the requested model: Zen free is $0, Zen paid is $${DEFAULT_PRICE.input}/1M input and free output; unknown Zen prices remain unknown unless configured. Legacy calls use configured or default rates. Not Console bills.
   Cached calls are listed separately as saved tokens.
 examples:
   jev-axi usage
@@ -58,18 +58,17 @@ export async function usageCommand(args: string[]): Promise<AxiRenderable> {
   const by = (p.values["--by"] ?? "command") as GroupBy;
   if (!["command", "day", "model", "project"].includes(by)) throw validation(`--by must be command, day, model, or project`);
   const entries = readUsage(days === 0 ? undefined : days);
-  const price = resolvePrices();
   const t = totals(entries);
-  const cost = estimateCost(t.input, t.output, price);
-  const saved = estimateCost(t.saved_input, t.saved_output, price);
+  const { cost, saved, unknown_cost_calls, unknown_saved_calls } = costTotals(entries);
   const window = days === 0 ? "all time" : `last ${days} day${days === 1 ? "" : "s"}`;
-  if (p.bools["--json"]) return JSON.stringify({ window, totals: t, cost, saved, entries }, null, 2);
+  if (p.bools["--json"]) return JSON.stringify({ window, totals: t, cost, saved,
+    ...(unknown_cost_calls ? { unknown_cost_calls } : {}), ...(unknown_saved_calls ? { unknown_saved_calls } : {}), entries }, null, 2);
   if (entries.length === 0) {
     return { usage: `0 calls recorded in the ${window}`, ledger: paths.usageLedger(), help: ["Run any jev-axi command; every API call is logged locally"] };
   }
   const groups: Record<string, unknown>[] = [...groupUsage(entries, by)].map(([key, list]) => {
     const g = totals(list);
-    const c = estimateCost(g.input, g.output, price);
+    const c = costTotals(list).cost;
     return {
       [by]: key,
       calls: g.calls,
@@ -78,7 +77,7 @@ export async function usageCommand(args: string[]): Promise<AxiRenderable> {
       input: g.input,
       output: g.output,
       avg_ms: g.billed_calls ? Math.round(g.ms / g.billed_calls) : 0,
-      cost: formatCost(c),
+      cost: formatEstimatedCost(c),
     };
   });
   if (by === "day") groups.sort((a, b) => String(b[by]).localeCompare(String(a[by])));
@@ -90,7 +89,7 @@ export async function usageCommand(args: string[]): Promise<AxiRenderable> {
     questions: t.questions,
     avg_ms: t.billed_calls ? Math.round(t.ms / t.billed_calls) : 0,
   };
-  out["cost"] = `${formatCost(cost)} estimated at $${price.input}/$${price.output} per 1M in/out${saved ? ` (${formatCost(saved)} saved by cache)` : ""}`;
+  out["cost"] = `${formatEstimatedCost(cost)} estimated by requested model (not Console bills)${t.cached_calls ? ` (${formatEstimatedCost(saved)} saved by cache)` : ""}`;
   out[`by_${by}`] = groups;
   const help: string[] = [];
   help.push(`Run \`jev-axi usage --by ${by === "day" ? "command" : "day"}\` for another view, or \`jev-axi stats\` for lifetime trends`);
@@ -102,8 +101,8 @@ Show or change persistent settings in ${paths.configFile()}.
 keys:
   apiKey           TypeSafe API key (env TYPESAFE_API_KEY and ./.env take precedence)
   model            default model (default ${DEFAULT_MODEL})
-  price.input      USD per 1M input tokens (default ${DEFAULT_PRICE.input})
-  price.output     USD per 1M output tokens (default ${DEFAULT_PRICE.output})
+  price.input      USD per 1M input tokens (legacy default ${DEFAULT_PRICE.input}; Zen free stays free)
+  price.output     USD per 1M output tokens (legacy default ${DEFAULT_PRICE.output}; Zen free stays free)
   act, confirm     band thresholds on confidence (default ${DEFAULT_THRESHOLDS.act} / ${DEFAULT_THRESHOLDS.confirm})
   cacheTtlHours    hours a cached response is reused (default ${DEFAULT_CACHE_TTL_HOURS}; 0 disables the cache)
   updateCheck      false turns off the daily npm registry lookup behind the "update available" notice (default true)
@@ -164,7 +163,7 @@ async function showConfig(c: JevConfig): Promise<Record<string, unknown>> {
     apiKey: backend.backend === "opencode-zen" ? "TypeSafe-only (not used for Zen)" : backend.credential === "ok" ? `configured (from ${backend.source})` : "missing",
     credential: backend.credential === "ok" ? `ok (${backend.source})` : "missing",
     model: backend.model,
-    price: `$${resolvePrices(c).input}/1M in, $${resolvePrices(c).output}/1M out${c.price?.input === undefined && c.price?.output === undefined ? " (default)" : ""}`,
+    price: `$${resolvePrices(c).input}/1M in, $${resolvePrices(c).output}/1M out (legacy rates; Zen free $0, paid default $${DEFAULT_PRICE.input}/1M input, unknown models need explicit prices; estimates not Console bills)`,
     thresholds: `act >= ${c.thresholds?.act ?? DEFAULT_THRESHOLDS.act}, confirm >= ${c.thresholds?.confirm ?? DEFAULT_THRESHOLDS.confirm}`,
     cache: `${cacheCount()} responses in ${paths.cacheDir()}, reused for ${resolveCacheTtlHours(c)}h`,
     ...(update ? { help: [updateHelp(update)] } : {}),
@@ -320,8 +319,8 @@ export function todayUsageLine(): string {
   const entries = readUsage(1);
   if (entries.length === 0) return "0 calls in the last 24h";
   const t = totals(entries);
-  const cost = estimateCost(t.input, t.output);
-  return `${t.calls} calls, ${formatTokens(t.input)} in / ${formatTokens(t.output)} out, ${t.cached_calls} cached, ${formatCost(cost)} in the last 24h`;
+  const { cost } = costTotals(entries);
+  return `${t.calls} calls, ${formatTokens(t.input)} in / ${formatTokens(t.output)} out, ${t.cached_calls} cached, ${formatEstimatedCost(cost)} in the last 24h`;
 }
 
 export { round };

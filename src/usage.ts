@@ -1,6 +1,6 @@
 import { appendFileSync, existsSync, readFileSync, renameSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { ensureDir, paths, resolvePrices, type Prices } from "./config.js";
+import { ensureDir, paths, readConfig, resolvePrices, type JevConfig, type Prices } from "./config.js";
 import type { BackendName } from "./backend.js";
 
 export interface BandCounts {
@@ -139,6 +139,41 @@ export function estimateCost(input: number, output: number, price?: Prices): num
   return (input * p.input + output * p.output) / 1_000_000;
 }
 
+/** A Zen estimate follows the requested tier, never the model name returned by the API. */
+export function estimateEntryCost(entry: UsageEntry, config: JevConfig = readConfig()): number | null {
+  if (entry.backend !== "opencode-zen") return estimateCost(entry.in, entry.out, config.price);
+  if (entry.requestedModel === "jev-1.13-free") return 0;
+  const base: Prices = entry.requestedModel === "jev-1.13" ? { input: 0.042, output: 0 } : {};
+  const input = config.price?.input ?? base.input;
+  const output = config.price?.output ?? base.output;
+  if ((entry.in !== 0 && input === undefined) || (entry.out !== 0 && output === undefined)) return null;
+  return (entry.in * (input ?? 0) + entry.out * (output ?? 0)) / 1_000_000;
+}
+
+export function costTotals(entries: UsageEntry[], config: JevConfig = readConfig()): {
+  cost: number | null; saved: number | null; unknown_cost_calls: number; unknown_saved_calls: number;
+} {
+  let cost = 0;
+  let saved = 0;
+  let unknown_cost_calls = 0;
+  let unknown_saved_calls = 0;
+  for (const entry of entries) {
+    const estimate = estimateEntryCost(entry, config);
+    if (entry.cached) {
+      if (estimate === null) unknown_saved_calls++;
+      else saved += estimate;
+    } else {
+      if (estimate === null) unknown_cost_calls++;
+      else cost += estimate;
+    }
+  }
+  return { cost: unknown_cost_calls ? null : cost, saved: unknown_saved_calls ? null : saved, unknown_cost_calls, unknown_saved_calls };
+}
+
+export function formatEstimatedCost(cost: number | null): string {
+  return cost === null ? "unknown" : formatCost(cost);
+}
+
 export function formatCost(usd: number): string {
   if (usd === 0) return "$0";
   if (usd < 0.01) return `$${usd.toFixed(5)}`;
@@ -156,7 +191,8 @@ export interface DayPoint {
   calls: number;
   questions: number;
   input: number;
-  cost: number;
+  cost: number | null;
+  unknown_cost_calls: number;
 }
 
 /** One point per calendar day (UTC) for the last `days` days, zero-filled. */
@@ -167,7 +203,8 @@ export function dailySeries(entries: UsageEntry[], days: number, now = new Date(
     const d = new Date(now.getTime() - i * 86_400_000).toISOString().slice(0, 10);
     const list = byDay.get(d) ?? [];
     const t = totals(list);
-    out.push({ day: d, calls: t.calls, questions: t.questions, input: t.input, cost: estimateCost(t.input, t.output) });
+    const { cost, unknown_cost_calls } = costTotals(list);
+    out.push({ day: d, calls: t.calls, questions: t.questions, input: t.input, cost, unknown_cost_calls });
   }
   return out;
 }

@@ -1,11 +1,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import { numberFlag, parseArgs } from "../args.js";
-import { paths, resolvePrices } from "../config.js";
+import { paths } from "../config.js";
 import { round } from "../format.js";
 import {
   dailySeries,
-  estimateCost,
-  formatCost,
+  costTotals,
+  estimateEntryCost,
+  formatEstimatedCost,
   formatTokens,
   groupUsage,
   projectName,
@@ -40,11 +41,9 @@ export async function statsCommand(args: string[]): Promise<Renderable> {
   if (all.length === 0) {
     return finish(p, { stats: "0 calls recorded yet", ledger: paths.usageLedger() }, [], ["Every jev-axi API call is logged locally; run a few commands and come back"]);
   }
-  const price = resolvePrices();
   const since = all.reduce((min, e) => (e.ts < min ? e.ts : min), all[0]!.ts).slice(0, 10);
   const lifetime = totals(all);
-  const lifetimeCost = estimateCost(lifetime.input, lifetime.output);
-  const lifetimeSaved = estimateCost(lifetime.saved_input, lifetime.saved_output);
+  const { cost: lifetimeCost, saved: lifetimeSaved } = costTotals(all);
 
   const cutoff = now.getTime() - days * 86_400_000;
   const prevCutoff = cutoff - days * 86_400_000;
@@ -55,8 +54,8 @@ export async function statsCommand(args: string[]): Promise<Renderable> {
   });
   const cur = totals(current);
   const prev = totals(previous);
-  const curCost = estimateCost(cur.input, cur.output);
-  const prevCost = estimateCost(prev.input, prev.output);
+  const { cost: curCost, saved: curSaved } = costTotals(current);
+  const { cost: prevCost } = costTotals(previous);
 
   const series = dailySeries(current, days, now);
   const activeDays = series.filter((d) => d.calls > 0).length;
@@ -81,7 +80,7 @@ export async function statsCommand(args: string[]): Promise<Renderable> {
           avg_in: t.billed_calls ? Math.round(t.input / t.billed_calls) : 0,
           avg_ms: t.billed_calls ? Math.round(t.ms / t.billed_calls) : 0,
           act: n ? `${Math.round((b.act / n) * 100)}%` : "-",
-          cost: formatCost(estimateCost(t.input, t.output)),
+          cost: formatEstimatedCost(costTotals(list).cost),
         };
       })
       .sort((a, b) => Number(b["calls"]) - Number(a["calls"]))
@@ -90,26 +89,26 @@ export async function statsCommand(args: string[]): Promise<Renderable> {
   const biggest = all.reduce((m, e) => (e.in > m.in ? e : m), all[0]!);
   const busiest = [...groupUsage(all, "day")].map(([day, list]) => ({ day, calls: list.length })).sort((a, b) => b.calls - a.calls)[0]!;
   const dailyRate = activeDays ? cur.calls / days : 0;
-  const monthly = (curCost / days) * 30;
+  const monthly = curCost === null ? null : (curCost / days) * 30;
 
   const out: Record<string, unknown> = {
     ledger: paths.usageLedger(),
-    lifetime: `since ${since}: ${lifetime.calls} calls, ${lifetime.questions} questions, ${formatTokens(lifetime.input)} in / ${formatTokens(lifetime.output)} out, ${formatCost(lifetimeCost)} at $${price.input}/1M in${lifetime.cached_calls ? `; ${lifetime.cached_calls} cached calls saved ${formatCost(lifetimeSaved)}` : ""}`,
+    lifetime: `since ${since}: ${lifetime.calls} calls, ${lifetime.questions} questions, ${formatTokens(lifetime.input)} in / ${formatTokens(lifetime.output)} out, ${formatEstimatedCost(lifetimeCost)} estimated by requested model${lifetime.cached_calls ? `; ${lifetime.cached_calls} cached calls saved ${formatEstimatedCost(lifetimeSaved)}` : ""}`,
     window: `last ${days} days vs the ${days} before`,
     calls: `${cur.calls} (${trendLabel(cur.calls, prev.calls)}), ${activeDays} active days, ${round(dailyRate, 1)}/day`,
     questions: `${cur.questions} (${trendLabel(cur.questions, prev.questions)}), ${cur.calls ? round(cur.questions / cur.calls, 1) : 0} per call`,
     tokens: `${formatTokens(cur.input)} in (${trendLabel(cur.input, prev.input)}), ${cur.billed_calls ? Math.round(cur.input / cur.billed_calls) : 0} avg per call`,
-    cost: `${formatCost(curCost)} (${trendLabel(curCost, prevCost)}), projected ${formatCost(monthly)}/month at this rate`,
+    cost: `${formatEstimatedCost(curCost)} (${curCost === null || prevCost === null ? "unknown" : trendLabel(curCost, prevCost)}), projected ${formatEstimatedCost(monthly)}/month at this rate`,
     latency: `${cur.billed_calls ? Math.round(cur.ms / cur.billed_calls) : 0}ms avg (${prev.billed_calls ? trendLabel(cur.ms / Math.max(1, cur.billed_calls), prev.ms / prev.billed_calls) : "new"})`,
-    cache: `${cur.calls ? Math.round((cur.cached_calls / cur.calls) * 100) : 0}% hit rate, ${formatCost(estimateCost(cur.saved_input, cur.saved_output))} saved`,
+    cache: `${cur.calls ? Math.round((cur.cached_calls / cur.calls) * 100) : 0}% hit rate, ${formatEstimatedCost(curSaved)} saved`,
     confidence: answered ? `${answered} answers: act ${pct(bands.act)}, confirm ${pct(bands.confirm)}, escalate ${pct(bands.escalate)}` : "no band data yet",
     [`trend_calls_${sparkDays}d`]: sparkline(tail.map((d) => d.calls)),
-    [`trend_cost_${sparkDays}d`]: sparkline(tail.map((d) => d.cost)),
+    [`trend_cost_${sparkDays}d`]: tail.some((d) => d.cost === null) ? "unknown" : sparkline(tail.map((d) => d.cost as number)),
     by_command: breakdown(current, "command"),
     by_project: breakdown(current, "project"),
     ...superviseStats(cutoff),
     records: {
-      biggest_call: `${biggest.cmd} on ${biggest.ts.slice(0, 10)}: ${formatTokens(biggest.in)} in, ${biggest.q} questions, ${formatCost(estimateCost(biggest.in, biggest.out))}`,
+      biggest_call: `${biggest.cmd} on ${biggest.ts.slice(0, 10)}: ${formatTokens(biggest.in)} in, ${biggest.q} questions, ${formatEstimatedCost(estimateEntryCost(biggest))}`,
       busiest_day: `${busiest.day}: ${busiest.calls} calls`,
     },
   };

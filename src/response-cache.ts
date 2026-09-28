@@ -3,7 +3,7 @@ import { lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, wr
 import { join, resolve } from "node:path";
 import type { EntryType } from "@typesafe-ai/sdk";
 import type { BackendName, ResolvedBackend } from "./backend.js";
-import { paths, resolveCacheTtlHours } from "./config.js";
+import { ensureDir, paths, resolveCacheTtlHours } from "./config.js";
 import type { Answer, QuestionMap, SystemOneEnvelope } from "./evaluation-types.js";
 import type { Usage } from "@typesafe-ai/sdk";
 
@@ -51,9 +51,11 @@ function ensureScope(s: CacheScope): boolean {
   if (!validScope(s)) return false;
   try {
     if (!safe(root(), "dir")) {
-      const parent = lstatSync(resolve(root(), ".."));
-      if (!parent.isDirectory() || parent.isSymbolicLink()) return false;
-      mkdirSync(root());
+      try {
+        const parent = lstatSync(resolve(root(), ".."));
+        if (!parent.isDirectory() || parent.isSymbolicLink()) return false;
+      } catch { /* the managed cache directory has not been created yet */ }
+      ensureDir(root());
     }
     for (const p of [root(), v2(), join(v2(), s.backend), s.dir]) {
       if (!safe(p, "dir")) {

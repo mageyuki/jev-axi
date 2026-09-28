@@ -1,5 +1,6 @@
 import { AxiError, exitCodeForError, runAxiCli } from "axi-sdk-js";
 import { encode } from "@toon-format/toon";
+import { withEvaluationContext } from "./client.js";
 import { renderHelp, renderWithHelp, type Renderable } from "./commands/common.js";
 import { availableUpdate, updateHelp } from "./update.js";
 import { VERSION } from "./version.js";
@@ -85,7 +86,7 @@ export const HELP: Record<string, string> = {
 
 type Cmd = (args: string[]) => Promise<Renderable>;
 const wrap = (cmd: Cmd) => async (args: string[]) => {
-  const out = await cmd(args);
+  const out = await withEvaluationContext(() => cmd(args));
   return typeof out === "string" ? out : renderWithHelp(out);
 };
 

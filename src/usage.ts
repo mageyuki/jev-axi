@@ -1,6 +1,7 @@
 import { appendFileSync, existsSync, readFileSync, renameSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { ensureDir, paths, resolvePrices, type Prices } from "./config.js";
+import type { BackendName } from "./backend.js";
 
 export interface BandCounts {
   act: number;
@@ -12,6 +13,8 @@ export interface UsageEntry {
   ts: string;
   cmd: string;
   model: string;
+  backend?: BackendName;
+  requestedModel?: string;
   in: number;
   out: number;
   ms: number;

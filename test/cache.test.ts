@@ -90,8 +90,12 @@ describe("response cache", () => {
     out = "";
     await main(["cache", "clear", "--stale"], stdout);
     expect(out).toContain("removed 1 stale responses");
-    const left = readdirSync(cacheDir).filter((f) => f !== "aliases.json");
+    const namespaces = join(cacheDir, "v2", "typesafe");
+    const endpoint = readdirSync(namespaces)[0]!;
+    const left = readdirSync(join(namespaces, endpoint)).filter((f) => f !== "aliases.json");
     expect(left).toHaveLength(1);
-    expect(JSON.parse(readFileSync(join(cacheDir, left[0]!), "utf8")).created).toBeTypeOf("number");
+    const entry = JSON.parse(readFileSync(join(namespaces, endpoint, left[0]!), "utf8"));
+    expect(entry).toMatchObject({ version: 2, backend: "typesafe", requestedModel: "jev-latest" });
+    expect(entry.created).toBeTypeOf("number");
   });
 });

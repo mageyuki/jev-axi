@@ -46,7 +46,9 @@ export async function resolveBackend(config: JevConfig = readConfig()): Promise<
   }
 
   const environmentModel = nonempty(process.env.JEV_MODEL);
-  const defaultModel = name === "opencode-zen" ? "jev-1.13-free" : name === "laya" ? resolveModel(undefined, config) === "jev-latest" ? "laya-421m" : resolveModel(undefined, config) : resolveModel(undefined, config);
+  const defaultModel = name === "opencode-zen" ? "jev-1.13-free"
+    : name === "laya" && process.env.TYPESAFE_DEFAULT_MODEL === undefined && config.model === undefined ? "laya-421m"
+    : resolveModel(undefined, config);
   let key: string | undefined;
   let source: CredentialSource;
   let endpoint: string;

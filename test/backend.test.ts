@@ -162,6 +162,15 @@ describe("backend selection and credential boundary", () => {
     expect(resolveBackendModel(await resolveBackend({ model: "config-model" }))).toBe("jev-1.13-free");
   });
 
+  it("Laya keeps an explicit jev-latest preference but defaults to laya-421m", async () => {
+    process.env.JEV_BACKEND = "laya";
+    process.env.TYPESAFE_DEFAULT_MODEL = "jev-latest";
+    expect(resolveBackendModel(await resolveBackend({}))).toBe("jev-latest");
+    delete process.env.TYPESAFE_DEFAULT_MODEL;
+    expect(resolveBackendModel(await resolveBackend({ model: "jev-latest" }))).toBe("jev-latest");
+    expect(resolveBackendModel(await resolveBackend({}))).toBe("laya-421m");
+  });
+
   it("missing Zen key gives Console guidance, not TypeSafe guidance", async () => {
     process.env.JEV_BACKEND = "opencode-zen";
     process.env.JEV_OPENCODE_DB = "";

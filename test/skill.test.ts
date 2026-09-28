@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { validateSkill } from "../scripts/build-skill.js";
 
@@ -6,6 +7,17 @@ const good = (frontmatter: string, body = "# jev-axi\n") => `---\n${frontmatter}
 describe("skill validation", () => {
   it("accepts the committed skill", () => {
     expect(validateSkill()).toEqual([]);
+  });
+
+  it("keeps fork-safe installation and backend alternatives in the shipped skill", () => {
+    const skill = readFileSync(new URL("../skills/jev-axi/SKILL.md", import.meta.url), "utf8");
+    expect(skill).not.toMatch(/npm install -g jev-axi|npx -y jev-axi/);
+    const compatibility = skill.match(/^compatibility: ([^\r\n]+)$/m)?.[1];
+    expect(compatibility).toMatch(/Zen/);
+    expect(compatibility).toMatch(/Console|OPENCODE_API_KEY/);
+    expect(compatibility).toMatch(/TypeSafe/);
+    expect(compatibility).toMatch(/Laya/);
+    expect(compatibility).toMatch(/\bor\b/i);
   });
 
   it("flags spec violations in frontmatter", () => {

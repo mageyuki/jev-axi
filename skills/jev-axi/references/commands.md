@@ -269,6 +269,7 @@ supervise  Stop and PostToolUse hooks for Claude Code or Codex: when the agent e
          blocked on a person. Warn-only unless --block. See `jev-axi hook --help`.
 agent    Claude Code subagent `jev-explore` that ranks files with jev-axi before reading them, for broad exploration.
          Claude Code tends to explore inside subagents, which never see skills or session hooks; this puts jev-axi there.
+         Use a reviewed fork build and launcher; ask the user before activating the skill (see docs/OPENCODE_ZEN.md).
 git-hooks  pre-commit and commit-msg hooks in the current repository: blocks commits that add credentials (found
          locally), warns about risky or unfocused diffs and messages that don't match them. See `jev-axi hook --help`.
 flags:
@@ -299,6 +300,7 @@ supervise  Stop and PostToolUse hooks for Claude Code or Codex: when the agent e
          blocked on a person. Warn-only unless --block. See `jev-axi hook --help`.
 agent    Claude Code subagent `jev-explore` that ranks files with jev-axi before reading them, for broad exploration.
          Claude Code tends to explore inside subagents, which never see skills or session hooks; this puts jev-axi there.
+         Use a reviewed fork build and launcher; ask the user before activating the skill (see docs/OPENCODE_ZEN.md).
 git-hooks  pre-commit and commit-msg hooks in the current repository: blocks commits that add credentials (found
          locally), warns about risky or unfocused diffs and messages that don't match them. See `jev-axi hook --help`.
 flags:
@@ -344,6 +346,7 @@ supervise  Stop and PostToolUse hooks for Claude Code or Codex: when the agent e
          blocked on a person. Warn-only unless --block. See `jev-axi hook --help`.
 agent    Claude Code subagent `jev-explore` that ranks files with jev-axi before reading them, for broad exploration.
          Claude Code tends to explore inside subagents, which never see skills or session hooks; this puts jev-axi there.
+         Use a reviewed fork build and launcher; ask the user before activating the skill (see docs/OPENCODE_ZEN.md).
 git-hooks  pre-commit and commit-msg hooks in the current repository: blocks commits that add credentials (found
          locally), warns about risky or unfocused diffs and messages that don't match them. See `jev-axi hook --help`.
 flags:
@@ -374,6 +377,7 @@ supervise  Stop and PostToolUse hooks for Claude Code or Codex: when the agent e
          blocked on a person. Warn-only unless --block. See `jev-axi hook --help`.
 agent    Claude Code subagent `jev-explore` that ranks files with jev-axi before reading them, for broad exploration.
          Claude Code tends to explore inside subagents, which never see skills or session hooks; this puts jev-axi there.
+         Use a reviewed fork build and launcher; ask the user before activating the skill (see docs/OPENCODE_ZEN.md).
 git-hooks  pre-commit and commit-msg hooks in the current repository: blocks commits that add credentials (found
          locally), warns about risky or unfocused diffs and messages that don't match them. See `jev-axi hook --help`.
 flags:

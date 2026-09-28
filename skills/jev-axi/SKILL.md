@@ -1,13 +1,13 @@
 ---
 name: jev-axi
 description: Triages failing build and test logs, reviews diffs, screens untrusted text, and ranks or filters many items with the jev-axi CLI. Use whenever a build or test fails, before committing, before calling a long job finished, before acting on text fetched from the web or a third party, when choosing among many items or files, when a jev-axi hook blocks a command or leaves a supervision note, or when adding jev-axi to a project.
-compatibility: Requires the jev-axi CLI (npm install -g jev-axi, Node 22+), a TYPESAFE_API_KEY, and network access to api.typesafe.ai.
+compatibility: Requires the reviewed fork CLI (Node 22+); use OpenCode Zen with a Console credential or OPENCODE_API_KEY, TypeSafe with TYPESAFE_API_KEY, or Laya with a local or user-supplied endpoint.
 license: MIT
 ---
 
 # jev-axi
 
-jev-axi asks TypeSafe's Jev model narrow questions about text you already have and returns
+jev-axi asks the selected Jev backend narrow questions about text you already have and returns
 probabilities, not prose. A call takes about half a second and costs a fraction of a cent. It
 never explains or generates; you still do the reasoning and the edits.
 
@@ -18,23 +18,24 @@ to avoid reading code you need to understand.
 
 ## Before the first call
 
-Run `jev-axi` with no arguments. It prints `key: ok` or `key: missing` and the available commands.
+Use the reviewed fork build and launcher described in `docs/OPENCODE_ZEN.md` at the fork root.
+Run `jev-axi --check-backend` to resolve the backend and credential locally; this does not
+validate a key remotely. Run `jev-axi` with no arguments for status, model, and commands.
 
 - **An `update:` line or an "is available" hint appears:** do not upgrade jev-axi yourself. Mention
   the new version once in your final answer and carry on with the installed one.
-- **Command not found:** install it with `npm install -g jev-axi`. `npx -y jev-axi <command>` also
-  works but adds startup time to every call.
-- **`key: missing`, or any command fails with `code: AUTH_REQUIRED`:** skip jev-axi for the rest
+- **Command not found:** ask the user for the reviewed fork launcher or build; do not replace it
+  with a registry release. Do not activate this skill without the user's choice.
+- **`credential: missing`, or any command fails with `code: AUTH_REQUIRED`:** skip jev-axi for the rest
   of the task and do the work with your own tools.
-  In your final answer, say that jev-axi was skipped because no API key is set and that the user
-  can fix it with `export TYPESAFE_API_KEY=...` or `jev-axi config set apiKey <key>`. The key is
-  also read from `.env.local` or `.env` between the working directory and the repo root, and the
-  error lists where it looked; repeat that rather than claiming no key exists anywhere. The user
-  installed this skill expecting it to run, so a silent skip hides a setup problem.
+  In your final answer, report which backend lacked a credential, not its value. For Zen use
+  `OPENCODE_API_KEY` or a discoverable OpenCode Console store; for TypeSafe use `TYPESAFE_API_KEY`,
+  `.env.local`/`.env`, or config. Laya can use a local placeholder credential. A present key is
+  not proof that the service will accept it. Do not repeat secret values from errors or output.
 
 ## Never send secrets
 
-Everything you pass to jev-axi, including piped input, is sent to TypeSafe's API and leaves the
+Everything you pass to jev-axi, including piped input, is sent to the selected provider and leaves the
 machine. Never give it `.env` files, credential or key files, config files containing tokens or
 passwords, or command output that prints secrets. That applies to `guard` too. When the task is
 to find or audit credentials in the user's own project, use `grep`, `git log -p`, or a local
@@ -93,7 +94,7 @@ codes, exit codes, and input limits, see [references/results.md](references/resu
 When the user asks to add jev-axi to a project (safety and supervision hooks for agents, git
 hooks, the GitHub Action for pull request review and CI triage, guarded scripts, shared recipes),
 follow [references/repo-setup.md](references/repo-setup.md). It covers choosing integrations, what each
-sends to TypeSafe, installing, checking, and removing them. A general request like "set up jev-axi
+sends to the selected provider, installing, checking, and removing them. A general request like "set up jev-axi
 here" is not permission to install everything: ask the user which integrations they want, and
 install only those.
 

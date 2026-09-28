@@ -5,7 +5,7 @@
 [![license](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 
 **A second opinion for coding agents, in half a second.** jev-axi is a CLI for
-[TypeSafe's Jev](https://docs.typesafe.ai/introduction), a model that never writes
+Jev through OpenCode Zen, [TypeSafe](https://docs.typesafe.ai/introduction), or Laya. Jev never writes
 text — it answers typed questions with calibrated probabilities, in about 400ms for
 a few thousandths of a cent. That makes it cheap enough to put in front of *every*
 command your agent runs.
@@ -94,11 +94,15 @@ judgments, not as a replacement for reading. The full writeup, including the mor
 interesting result that the agent never loaded the skill unprompted, is in
 [docs/skills-do-not-get-used.md](docs/skills-do-not-get-used.md).
 
-```sh
-npm install -g jev-axi        # or: npx -y jev-axi ...
-export TYPESAFE_API_KEY=...   # or put it in .env.local / .env (found from the current directory up to the repo root), or `jev-axi config set apiKey ...`
-jev-axi                       # live status: key, model, usage, commands
-```
+For this reviewed fork, build from the checkout with `pnpm install && pnpm build`,
+then use `node dist/bin/jev-axi.js --check-backend` for a **local** credential
+preflight (not remote key validation). Use `node dist/bin/jev-axi.js` for status
+and commands, or create a user-controlled launcher for that build. Zen uses
+`OPENCODE_API_KEY` or an optional OpenCode Console SQLite credential; TypeSafe
+uses `TYPESAFE_API_KEY`, `.env.local`/`.env`, or config. See
+[OpenCode Zen and fork setup](docs/OPENCODE_ZEN.md) for backend selection, models,
+database discovery, Laya, cache behavior, and safe skill activation. Do not
+replace this reviewed fork with a registry install in response to an update hint.
 
 ## Commands
 
@@ -201,7 +205,7 @@ can be reviewed and tuned without reading the command code.
 
 ## Usage, spend, and trends
 
-The TypeSafe API reports per-request token counts but has no spend endpoint,
+The provider reports per-request token counts but has no spend endpoint here,
 so `jev-axi` keeps a ledger of every call in your config folder
 (`~/.config/jev-axi/stats/usage.jsonl`). Each record has the command, model,
 tokens, latency, cache status, the project it ran in, and how many answers
@@ -214,10 +218,10 @@ landed in each confidence band.
   per-project tables with average questions per call and the share of confident
   answers, cache hit rate, records, and a projected monthly cost.
 
-The
-default price is $0.042 per 1M input tokens with output tokens free, which is
-why packing many questions into one call is nearly free; override if your plan
-differs:
+The legacy TypeSafe default price is $0.042 per 1M input tokens with output
+tokens free; Zen free is estimated at $0, while paid or unknown models may
+need configured prices. These estimates are not Console bills. Override if
+your plan differs:
 
 ```sh
 jev-axi config set price.input 0.05    # USD per 1M input tokens
@@ -239,7 +243,7 @@ project, before it runs:
   builds, installing declared dependencies, deleting build folders, and edits inside the
   project are decided locally. Anything with command substitution, redirection, `eval`, or
   `sudo` always gets a real check.
-- **Everything else is sent to Jev** with credentials redacted (API keys, tokens, passwords,
+- **Everything else is sent to the selected provider** with credentials redacted (API keys, tokens, passwords,
   connection strings, private keys), together with the contents of any local script the
   command runs, so a harmless-looking `./scripts/cleanup.sh` is judged by what it does.
 - **Decisions:** block on a strong destructive, exfiltration, download-and-run, or
@@ -433,14 +437,9 @@ jev-axi setup git-hooks --remove
 - `jev-axi setup hooks` installs SessionStart hooks for Claude Code, Codex, and
   OpenCode so each session begins with the status view. Add `--project` to
   scope it to the current repository.
-- Install the agent skills:
-
-  ```sh
-  npx skills add shiftynick/jev-axi --skill jev-axi --agent claude-code      # using jev-axi
-  npx skills add shiftynick/jev-axi --skill adopting-jev --agent claude-code # finding uses for Jev
-  ```
-
-  Use `--agent '*'` for all supported agents.
+- Activate skills only after the user chooses them and the agent scope. Use the
+  reviewed fork's skill directory rather than fetching an unrelated registry
+  artifact; see [fork setup](docs/OPENCODE_ZEN.md).
 
   - **`jev-axi`** teaches agents when and how to use the CLI, when not to, never to send secrets,
     and how to add jev-axi to a repository. `references/` holds the workflows, how to read
@@ -456,11 +455,12 @@ jev-axi setup git-hooks --remove
 ## Data and billing
 
 Every command that asks Jev a question sends the text it judges (items, files, diffs, logs,
-fetched pages, or tool calls) to TypeSafe's API, which bills per request. The safety hook,
+fetched pages, or tool calls) to the selected provider. The safety hook,
 `guard-exec`, `diff`, `triage`, the git hooks, and the GitHub Action redact credentials in
 known formats first, and the safety checks decide routine calls locally. Other commands send
 their input as given, and redaction only catches recognizable credential formats, so don't
-point jev-axi at data you can't share with TypeSafe. The only other request is a version lookup:
+point jev-axi at data you can't share with that provider. A user-supplied Laya URL
+is not necessarily local. The separate version lookup is:
 the bare `jev-axi` status screen and `jev-axi config` ask the npm registry for the latest release at
 most once a day, and show one line when there is a newer one (errors that an upgrade might fix repeat
 it from the saved result). No other command makes that request. Turn it off with

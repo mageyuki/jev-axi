@@ -225,6 +225,7 @@ supervise  Stop and PostToolUse hooks for Claude Code or Codex: when the agent e
          blocked on a person. Warn-only unless --block. See \`jev-axi hook --help\`.
 agent    Claude Code subagent \`jev-explore\` that ranks files with jev-axi before reading them, for broad exploration.
          Claude Code tends to explore inside subagents, which never see skills or session hooks; this puts jev-axi there.
+         Use a reviewed fork build and launcher; ask the user before activating the skill (see docs/OPENCODE_ZEN.md).
 git-hooks  pre-commit and commit-msg hooks in the current repository: blocks commits that add credentials (found
          locally), warns about risky or unfocused diffs and messages that don't match them. See \`jev-axi hook --help\`.
 flags:
@@ -258,7 +259,7 @@ export async function setupCommand(args: string[]): Promise<AxiRenderable> {
       ? []
       : [
           "Restart the agent session to activate it",
-          "Commands and edits outside the project are sent to TypeSafe's API with secrets redacted; routine calls never leave the machine",
+          "Commands and edits outside the project are sent to the selected provider with recognizable secrets redacted; routine calls never leave the machine",
           "Test it: echo '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"rm -rf ~/\"}}' | jev-axi hook pre-tool-use --explain",
         ];
     return { safety: { status, agent, scope, file }, ...(help.length ? { help } : {}) };
@@ -272,7 +273,7 @@ export async function setupCommand(args: string[]): Promise<AxiRenderable> {
       ? []
       : [
           "Restart the agent session to activate it",
-          "The job, a bounded diff, and recent tool calls are sent to TypeSafe's API with secrets redacted",
+          "The job, a bounded diff, and recent tool calls are sent to the selected provider with recognizable secrets redacted",
           "The scores are not calibrated for every project: check `jev-axi stats` after a few sessions before turning on --block",
         ];
     return { supervise: { status, agent, mode: p.bools["--block"] ? "block" : "warn", scope, file }, ...(help.length ? { help } : {}) };
@@ -280,7 +281,7 @@ export async function setupCommand(args: string[]): Promise<AxiRenderable> {
   if (action === "agent") {
     const { file, status } = configureAgent(p.bools["--project"], p.bools["--remove"], p.bools["--replace-explore"]);
     const help = /installed|updated/.test(status)
-      ? ["Restart Claude Code to load it", "It preloads the jev-axi skill; install that too: npx skills add shiftynick/jev-axi --skill jev-axi"]
+      ? ["Restart Claude Code to load it", "It preloads the jev-axi skill; ask the user before activating the reviewed fork skill (see docs/OPENCODE_ZEN.md)"]
       : [];
     return { agent: { status, scope, file }, ...(help.length ? { help } : {}) };
   }

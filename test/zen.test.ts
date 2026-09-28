@@ -41,9 +41,9 @@ describe("Zen wire", () => {
   });
 
   it("rejects score maps before making a request", async () => {
-    const bad = { s: { type: "score", criteria: { 0: "low", 1: "high" } } } as unknown as QuestionMap;
+    const bad = { s: { type: "score", instructions: "Score the text", criteria: { 0: "low", 1: "high" } } } as unknown as QuestionMap;
     const wire = scriptedFetch([]);
-    expect(() => validateZenQuestions(bad)).toThrow();
+    expect(() => validateZenQuestions(bad)).toThrow(/array of at least two levels/);
     await expect(evaluateZen(await backend(), { ...request, questions: bad }, { fetch: wire.fetch })).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
     expect(wire.requests).toHaveLength(0);
   });

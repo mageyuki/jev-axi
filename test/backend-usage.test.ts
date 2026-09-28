@@ -10,6 +10,7 @@ import type { EvalResult } from "../src/client.js";
 const entry = (over: Partial<UsageEntry> = {}): UsageEntry => ({ ts: "2026-09-16T10:00:00Z", cmd: "check", model: "jev-1.13", backend: "opencode-zen", requestedModel: "jev-1.13-free", in: 1_000_000, out: 500_000, ms: 10, q: 1, cached: false, project: "alpha", ...over });
 
 describe("requested-model estimates", () => {
+  const result = (e: UsageEntry): EvalResult => ({ model: e.model, requestedModel: e.requestedModel, backend: e.backend, cached: e.cached, ms: e.ms, usage: { input_tokens: e.in, output_tokens: e.out }, answers: {} });
   it("prices free, paid, unknown, and legacy entries independently of returned model", () => {
     expect(estimateEntryCost(entry())).toBe(0);
     expect(estimateEntryCost(entry({ requestedModel: "jev-1.13" }))).toBe(0.042);
@@ -41,11 +42,21 @@ describe("requested-model estimates", () => {
   });
 
   it("renders immediate single and merged usage without assigning unknown spend a number", () => {
-    const result = (e: UsageEntry): EvalResult => ({ model: e.model, requestedModel: e.requestedModel, backend: e.backend, cached: e.cached, ms: e.ms, usage: { input_tokens: e.in, output_tokens: e.out }, answers: {} });
     expect(usageLine(result(entry()))).toBe("1000000in/500000out 10ms jev-1.13 $0");
     expect(usageLine(result(entry({ requestedModel: "jev-1.13", cached: true })))).toContain("saved $0.0420");
     expect(usageLine(result(entry({ requestedModel: "future" })))).toContain("unknown");
     expect(mergedUsageLine([result(entry()), result(entry({ requestedModel: "future" }))])).toContain("unknown");
+  });
+
+  it("reports saved paid cost when all merged calls are cached", () => {
+    const paidHit = result(entry({ requestedModel: "jev-1.13", cached: true }));
+    expect(mergedUsageLine([paidHit, paidHit])).toBe("2000000in/1000000out 20ms 2 calls (2 cached) jev-1.13 saved $0.0840");
+  });
+
+  it("reports unknown when a merged call has unpriced cached savings", () => {
+    const paidHit = result(entry({ requestedModel: "jev-1.13", cached: true }));
+    const unknownHit = result(entry({ requestedModel: "future", cached: true }));
+    expect(mergedUsageLine([paidHit, unknownHit])).toBe("2000000in/1000000out 20ms 2 calls (2 cached) jev-1.13 unknown");
   });
 });
 

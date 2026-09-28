@@ -51,8 +51,9 @@ export function mergedUsageLine(results: EvalResult[]): string {
   const output = results.reduce((s, r) => s + r.usage.output_tokens, 0);
   const ms = results.reduce((s, r) => s + r.ms, 0);
   const cached = results.filter((r) => r.cached).length;
-  const { cost } = costTotals(results.map(usageEntry));
-  return [`${input}in/${output}out`, `${ms}ms`, `${results.length} calls${cached ? ` (${cached} cached)` : ""}`, results[0]!.model, formatEstimatedCost(cost)].join(" ");
+  const { cost, saved, unknown_cost_calls, unknown_saved_calls } = costTotals(results.map(usageEntry));
+  const estimate = unknown_cost_calls || unknown_saved_calls ? "unknown" : cached === results.length ? `saved ${formatEstimatedCost(saved)}` : formatEstimatedCost(cost);
+  return [`${input}in/${output}out`, `${ms}ms`, `${results.length} calls${cached ? ` (${cached} cached)` : ""}`, results[0]!.model, estimate].join(" ");
 }
 
 function usageEntry(r: EvalResult): UsageEntry {

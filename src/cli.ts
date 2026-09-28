@@ -129,8 +129,10 @@ export async function main(argv = process.argv.slice(2), stdout?: { write: (chun
     }) as typeof process.emitWarning;
     try {
       try { target.write(`${await checkBackend()}\n`); }
-      catch {
-        process.stderr.write("Backend credential unavailable; configure OpenCode Console / OPENCODE_API_KEY or the selected backend credential; use a compatible runtime for Console store discovery.\n");
+      catch (error) {
+        process.stderr.write(error instanceof AxiError && error.code === "VALIDATION_ERROR"
+          ? "Invalid backend configuration\n"
+          : "Backend credential unavailable; configure OpenCode Console / OPENCODE_API_KEY or the selected backend credential; use a compatible runtime for Console store discovery.\n");
         process.exitCode = 1;
       }
     } finally { process.emitWarning = emitWarning; }

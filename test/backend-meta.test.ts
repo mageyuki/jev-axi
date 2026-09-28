@@ -42,6 +42,14 @@ describe("backend metadata without network", () => {
     });
   });
 
+  it("reports invalid backend selection as configuration failure, not missing credentials", async () => {
+    expect(await run(["--check-backend"], { JEV_BACKEND: "nope" })).toEqual({
+      stdout: "",
+      stderr: "Invalid backend configuration\n",
+      code: 1,
+    });
+  });
+
   it("fails missing Zen credentials without fallback or secret output", async () => {
     const result = await run(["--check-backend"], { OPENCODE_API_KEY: "" });
     expect(result.code).not.toBe(0);

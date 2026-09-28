@@ -11,9 +11,11 @@ a file, screening untrusted text, agent safety hooks, guarded shell commands, gi
 GitHub Action for pull requests and CI. Team-specific question sets live in `.jev-axi/recipes/*.yaml`
 and run with `jev-axi recipe run <name>`.
 
+Use the reviewed fork build and launcher, not a registry installation. See
+`docs/OPENCODE_ZEN.md` in the fork root for backend selection, credential setup, and launcher
+instructions. After the user has set up that launcher:
+
 ```sh
-npm install -g jev-axi
-export TYPESAFE_API_KEY=...
 jev-axi                       # status and command list
 npm test 2>&1 | jev-axi triage
 jev-axi recipe new release-risk --project

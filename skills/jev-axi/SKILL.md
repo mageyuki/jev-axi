@@ -26,7 +26,7 @@ validate a key remotely. Run `jev-axi` with no arguments for status, model, and 
   the new version once in your final answer and carry on with the installed one.
 - **Command not found:** ask the user for the reviewed fork launcher or build; do not replace it
   with a registry release. Do not activate this skill without the user's choice.
-- **`credential: missing`, or any command fails with `code: AUTH_REQUIRED`:** skip jev-axi for the rest
+- **`key: missing` in status, `credential: missing` in config, or any command fails with `code: AUTH_REQUIRED`:** skip jev-axi for the rest
   of the task and do the work with your own tools.
   In your final answer, report which backend lacked a credential, not its value. For Zen use
   `OPENCODE_API_KEY` or a discoverable OpenCode Console store; for TypeSafe use `TYPESAFE_API_KEY`,

@@ -76,10 +76,14 @@ function files(dir: string): string[] {
 function parse(file: string): unknown {
   if (!safe(file, "file")) return undefined;
   let fd: number;
-  const noFollow = typeof constants.O_NOFOLLOW === "number" && constants.O_NOFOLLOW > 0 ? constants.O_NOFOLLOW : 0;
-  try { fd = openSync(file, constants.O_RDONLY | noFollow); } catch { return undefined; }
+  let flags: number;
+  if (typeof constants.O_NOFOLLOW === "number" && constants.O_NOFOLLOW > 0) flags = constants.O_RDONLY | constants.O_NOFOLLOW;
+  else if (process.platform === "win32") flags = constants.O_RDONLY | 0x00200000; // FILE_FLAG_OPEN_REPARSE_POINT
+  else return undefined;
+  try { fd = openSync(file, flags); } catch { return undefined; }
   try {
-    if (!fstatSync(fd).isFile()) return undefined;
+    const stat = fstatSync(fd);
+    if (!stat.isFile() || stat.isSymbolicLink()) return undefined;
     return JSON.parse(readFileSync(fd, "utf8"));
   } catch { return undefined; }
   finally { try { closeSync(fd); } catch { /* best effort */ } }

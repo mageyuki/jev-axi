@@ -6,8 +6,11 @@ const deny = () => { throw new Error('Unexpected network request in test subproc
 const connect = net.connect;
 const createConnection = net.createConnection;
 // TSX uses a local Unix-domain IPC socket; block remote sockets, not IPC.
-net.connect = function (...args) { return typeof args[0] === 'string' || args[0]?.path ? connect.apply(this, args) : deny(); };
-net.createConnection = function (...args) { return typeof args[0] === 'string' || args[0]?.path ? createConnection.apply(this, args) : deny(); };
+const isIpc = (value) => typeof value === 'string'
+  ? /[/\\]/.test(value)
+  : typeof value?.path === 'string' && value.path.length > 0 && !/^\d+$/.test(value.path);
+net.connect = function (...args) { return isIpc(args[0]) ? connect.apply(this, args) : deny(); };
+net.createConnection = function (...args) { return isIpc(args[0]) ? createConnection.apply(this, args) : deny(); };
 tls.connect = deny;
 http.request = deny;
 http.get = deny;

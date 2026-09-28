@@ -1,5 +1,4 @@
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -20,7 +19,10 @@ describe("backend metadata without network", () => {
     expect(await run(["--check-backend"], {}, ["--no-experimental-sqlite"])).toEqual({ stdout: "opencode-zen\n", stderr: "", code: 0 });
   });
 
-  it("keeps stderr empty when the preflight credential comes from a synthetic SQLite store", async () => {
+  it("keeps stderr empty when the preflight credential comes from a synthetic SQLite store", async ctx => {
+    let DatabaseSync: typeof import("node:sqlite").DatabaseSync;
+    try { ({ DatabaseSync } = await import("node:sqlite")); }
+    catch { ctx.skip(); return; }
     const file = join(mkdtempSync(join(tmpdir(), "jev-preflight-store-")), "opencode.db");
     const db = new DatabaseSync(file);
     db.exec("CREATE TABLE credential (integration_id TEXT, value TEXT)");

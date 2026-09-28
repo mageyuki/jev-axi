@@ -1,8 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi, type TestContext } from "vitest";
 import { resolveBackend, resolveBackendModel, requireBackendCredential, describeBackend } from "../src/backend.js";
 import { resolveConsoleCredential, resolveOpenCodeDbPath } from "../src/opencode-credentials.js";
 
@@ -10,7 +9,10 @@ const discovery = vi.hoisted(() => vi.fn());
 vi.mock("node:child_process", () => ({ execFile: discovery }));
 afterEach(() => { discovery.mockReset(); vi.restoreAllMocks(); });
 
-function dbWith(rows: Array<[string, string]>): string {
+async function dbWith(rows: Array<[string, string]>, ctx: TestContext): Promise<string> {
+  let DatabaseSync: typeof import("node:sqlite").DatabaseSync;
+  try { ({ DatabaseSync } = await import("node:sqlite")); }
+  catch { ctx.skip(); throw new Error("SQLite unavailable"); }
   const file = join(mkdtempSync(join(tmpdir(), "jev-store-")), "opencode.db");
   const db = new DatabaseSync(file);
   db.exec("CREATE TABLE credential (integration_id TEXT, value TEXT)");
@@ -64,31 +66,37 @@ describe("backend selection and credential boundary", () => {
     expect(discovery).not.toHaveBeenCalled();
   });
 
-  it("automatic Zen uses the environment key ahead of the store; absent credential selects TypeSafe", async () => {
+  it("automatic Zen uses the environment key without store discovery; absent credential selects TypeSafe", async () => {
     delete process.env.JEV_BACKEND;
-    dbWith([["opencode", JSON.stringify({ type: "key", key: "synthetic-store" })]]);
+    process.env.JEV_OPENCODE_DB = join(tmpdir(), "absent.db");
     process.env.OPENCODE_API_KEY = "  synthetic-env  ";
     expect((await resolveBackend()).credential()).toBe("synthetic-env");
     delete process.env.OPENCODE_API_KEY;
-    expect((await resolveBackend({})).credential()).toBe("synthetic-store");
     process.env.JEV_OPENCODE_DB = "";
     expect((await resolveBackend({})).name).toBe("typesafe");
+    expect(discovery).not.toHaveBeenCalled();
+  });
+
+  it("automatic Zen uses the store when the environment key is absent", async ctx => {
+    delete process.env.JEV_BACKEND;
+    await dbWith([["opencode", JSON.stringify({ type: "key", key: "synthetic-store" })]], ctx);
+    expect((await resolveBackend({})).credential()).toBe("synthetic-store");
     expect(discovery).not.toHaveBeenCalled();
   });
 
   it.each([
     [{ type: "key", key: "  synthetic-first-key  " }, "synthetic-first-key"],
     [{ type: "oauth", key: " ", access: "  synthetic-first-access  " }, "synthetic-first-access"],
-  ])("skips unusable rows and takes the first later usable Console record", async (first, expected) => {
+  ])("skips unusable rows and takes the first later usable Console record", async (first, expected, ctx) => {
     delete process.env.JEV_BACKEND;
-    const file = dbWith([
+    const file = await dbWith([
       ["other", JSON.stringify({ type: "key", key: "wrong-integration" })],
       ["opencode", "{"], ["opencode", JSON.stringify({ type: "unknown", key: "wrong-type" })],
       ["opencode", JSON.stringify({ type: "key", key: "  " })],
       ["opencode", JSON.stringify({ type: "oauth", key: "", access: " " })],
       ["opencode", JSON.stringify(first)],
       ["opencode", JSON.stringify({ type: "key", key: "synthetic-later" })],
-    ]);
+    ], ctx);
     const before = readFileSync(file);
     const b = await resolveBackend({});
     expect(b.name).toBe("opencode-zen");
@@ -97,8 +105,8 @@ describe("backend selection and credential boundary", () => {
     expect(readFileSync(file)).toEqual(before);
   });
 
-  it("all unusable records and missing stores stay unresolved without creation", async () => {
-    const file = dbWith([["opencode", "not json"], ["other", JSON.stringify({ type: "key", key: "other" })]]);
+  it("all unusable records and missing stores stay unresolved without creation", async ctx => {
+    const file = await dbWith([["opencode", "not json"], ["other", JSON.stringify({ type: "key", key: "other" })]], ctx);
     expect(await resolveConsoleCredential()).toEqual({ source: "missing" });
     process.env.JEV_OPENCODE_DB = join(file, "nonexistent.db");
     expect(await resolveConsoleCredential()).toEqual({ source: "missing" });

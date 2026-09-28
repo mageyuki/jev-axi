@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { configureAgent } from "./agent.js";
 import { configureGitHooks } from "./githooks.js";
 import { configureSuperviseHooks, SUPERVISE_HOOK_COMMAND, configureSafetyHook, safetyHookPath as configureSafetyHookPath, SAFETY_HOOK_COMMAND } from "./hook.js";
@@ -171,9 +171,8 @@ async function showConfig(c: JevConfig): Promise<Record<string, unknown>> {
 }
 
 export function cacheCount(): number {
-  const dir = paths.cacheDir();
-  if (!existsSync(dir)) return 0;
-  return readdirSync(dir).filter((f) => f.endsWith(".json") && f !== "aliases.json").length;
+  const stats = cacheStats();
+  return stats.entries - stats.legacyEntries;
 }
 
 export const CACHE_HELP = `usage: jev-axi cache [clear [--stale]]

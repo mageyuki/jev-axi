@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { EntryType } from "@typesafe-ai/sdk";
 import type { BackendName, ResolvedBackend } from "./backend.js";
 import { ensureDir, paths, resolveCacheTtlHours } from "./config.js";
@@ -30,8 +30,9 @@ const v2 = () => join(root(), "v2");
 function safe(path: string, kind: "file" | "dir"): boolean {
   const base = resolve(root());
   const target = resolve(path);
-  if (target !== base && !target.startsWith(base + "/")) return false;
-  const parts = target === base ? [] : target.slice(base.length + 1).split("/");
+  const child = relative(base, target);
+  if (child === ".." || child.startsWith(`..${sep}`) || isAbsolute(child)) return false;
+  const parts = child ? child.split(sep) : [];
   let current = base;
   try {
     const first = lstatSync(current);

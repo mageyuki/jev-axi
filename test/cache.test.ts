@@ -47,6 +47,26 @@ describe("response cache", () => {
     expect(api.state.calls).toBe(1);
   });
 
+  it("reports written v2 responses but not legacy JSON in home and config", async () => {
+    const api = fakeApi();
+    configureFetch(api.fetch);
+    await check();
+    const cacheDir = join(dir, "cache", "jev-axi");
+    out = "";
+    await main([], stdout);
+    expect(out).toContain("cache: 1 responses");
+    out = "";
+    await main(["config"], stdout);
+    expect(out).toContain('cache: "1 responses in ');
+    writeFileSync(join(cacheDir, "legacy.json"), "{}");
+    out = "";
+    await main([], stdout);
+    expect(out).toContain("cache: 1 responses");
+    out = "";
+    await main(["config"], stdout);
+    expect(out).toContain('cache: "1 responses in ');
+  });
+
   it("stops serving cached answers once jev-latest resolves to a new version", async () => {
     const api = fakeApi();
     configureFetch(api.fetch);

@@ -118,11 +118,22 @@ export async function main(argv = process.argv.slice(2), stdout?: { write: (chun
       process.exitCode = 2;
       return;
     }
-    try { target.write(`${await checkBackend()}\n`); }
-    catch {
-      process.stderr.write("Backend credential unavailable; configure OpenCode Console / OPENCODE_API_KEY or the selected backend credential; use a compatible runtime for Console store discovery.\n");
-      process.exitCode = 1;
-    }
+    // Node 22 emits this one warning when Console credential discovery imports node:sqlite.
+    // Keep all unrelated warnings intact and restore the original emitter after preflight.
+    const emitWarning = process.emitWarning;
+    process.emitWarning = ((warning: string | Error, type?: string | { type?: string }, ...rest: unknown[]) => {
+      const message = typeof warning === "string" ? warning : warning.message;
+      const name = typeof type === "string" ? type : type?.type ?? (warning instanceof Error ? warning.name : undefined);
+      if (name === "ExperimentalWarning" && message === "SQLite is an experimental feature and might change at any time") return;
+      return Reflect.apply(emitWarning, process, [warning, type, ...rest]);
+    }) as typeof process.emitWarning;
+    try {
+      try { target.write(`${await checkBackend()}\n`); }
+      catch {
+        process.stderr.write("Backend credential unavailable; configure OpenCode Console / OPENCODE_API_KEY or the selected backend credential; use a compatible runtime for Console store discovery.\n");
+        process.exitCode = 1;
+      }
+    } finally { process.emitWarning = emitWarning; }
     return;
   }
   // Commands that print nothing (hooks, guard-exec running a command) must not add a blank line

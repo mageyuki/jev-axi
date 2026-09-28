@@ -1,4 +1,5 @@
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -17,6 +18,26 @@ describe("backend metadata without network", () => {
 
   it("preflights an environment credential before ordinary CLI handling without importing SQLite", async () => {
     expect(await run(["--check-backend"], {}, ["--no-experimental-sqlite"])).toEqual({ stdout: "opencode-zen\n", stderr: "", code: 0 });
+  });
+
+  it("keeps stderr empty when the preflight credential comes from a synthetic SQLite store", async () => {
+    const file = join(mkdtempSync(join(tmpdir(), "jev-preflight-store-")), "opencode.db");
+    const db = new DatabaseSync(file);
+    db.exec("CREATE TABLE credential (integration_id TEXT, value TEXT)");
+    db.prepare("INSERT INTO credential VALUES (?, ?)").run("opencode", JSON.stringify({ type: "key", key: "synthetic-store-key" }));
+    db.close();
+    expect(await run(["--check-backend"], { OPENCODE_API_KEY: "", JEV_OPENCODE_DB: file })).toEqual({
+      stdout: "opencode-zen\n", stderr: "", code: 0,
+    });
+  });
+
+  it("prints only the fixed failure line when a synthetic SQLite store is absent", async () => {
+    const file = join(mkdtempSync(join(tmpdir(), "jev-preflight-miss-")), "absent.db");
+    expect(await run(["--check-backend"], { OPENCODE_API_KEY: "", JEV_OPENCODE_DB: file })).toEqual({
+      stdout: "",
+      stderr: "Backend credential unavailable; configure OpenCode Console / OPENCODE_API_KEY or the selected backend credential; use a compatible runtime for Console store discovery.\n",
+      code: 1,
+    });
   });
 
   it("fails missing Zen credentials without fallback or secret output", async () => {
